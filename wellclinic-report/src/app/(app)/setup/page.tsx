@@ -1,6 +1,6 @@
 import { configuredMembers, requireSession } from '@/lib/auth';
 import { calendarSources, listEvents } from '@/lib/calendar';
-import { getDailyReports } from '@/lib/data';
+import { checkSheet } from '@/lib/sheets';
 import { TABLES, type TableKey } from '@/lib/schema';
 import { todayKST } from '@/lib/date';
 import { Badge, Card, PageHeader } from '@/components/ui';
@@ -23,7 +23,7 @@ export default async function SetupPage() {
   const session = await requireSession();
   const today = todayKST();
 
-  const sheetCheck = await getDailyReports();
+  const sheet = await checkSheet();
   const calendars = calendarSources();
   const calendarCheck = calendars.length > 0 ? await listEvents(today, today) : null;
 
@@ -39,16 +39,32 @@ export default async function SetupPage() {
 
       <div className="mb-5 grid gap-4 md:grid-cols-2">
         <Card title="구글 시트">
-          {sheetCheck.error ? (
+          {sheet.error ? (
             <>
               <Badge tone="red">연결 실패</Badge>
-              <p className="mt-2 break-all text-[13px] text-ink-600">{sheetCheck.error}</p>
+              <p className="mt-2 break-all text-[13px] text-ink-600">{sheet.error}</p>
+              <p className="mt-2 text-[13px] text-ink-500">
+                시트 공유에서 서비스 계정 이메일을 편집자로 초대했는지, GOOGLE_SHEET_ID 가 맞는지
+                확인해 주세요.
+              </p>
+            </>
+          ) : sheet.missing.length > 0 ? (
+            <>
+              <Badge tone="amber">탭 만들기 필요</Badge>
+              <p className="mt-2 text-[13px] text-ink-600">
+                시트 연결은 정상입니다{sheet.title && ` (${sheet.title})`}. 아래 탭 만들기 버튼을
+                눌러 주세요.
+              </p>
+              <p className="mt-1 text-[13px] text-ink-500">
+                없는 탭 {sheet.missing.length}개 · {sheet.missing.join(', ')}
+              </p>
             </>
           ) : (
             <>
               <Badge tone="green">정상</Badge>
               <p className="mt-2 text-[13px] text-ink-600">
-                일일보고 {sheetCheck.rows.length}건을 읽었습니다.
+                탭 {sheet.existing.length}개가 모두 준비돼 있습니다
+                {sheet.title && ` (${sheet.title})`}.
               </p>
             </>
           )}

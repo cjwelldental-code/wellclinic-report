@@ -101,13 +101,35 @@ function lastCol(table: TableKey): string {
   return colLetter(TABLES[table].headers.length - 1);
 }
 
+/**
+ * 아직 탭이 만들어지지 않은 상태인지 판별한다.
+ * 구글은 없는 탭을 읽으려 하면 'Unable to parse range' 를 돌려준다.
+ * 스프레드시트 자체가 없을 때 나오는 'Requested entity was not found' 와는 다르므로
+ * 이 문구만 좁게 본다.
+ */
+function isMissingTab(e: unknown): boolean {
+  return String((e as Error)?.message ?? '').includes('Unable to parse range');
+}
+
+const NO_TAB_MESSAGE =
+  '시트 탭이 아직 만들어지지 않았습니다. 설정 화면에서 탭 만들기 버튼을 눌러 주세요.';
+
 /** 탭 전체를 객체 배열로 읽는다. 헤더 행은 제외한다. */
 export async function readTable<T extends Row = Row>(table: TableKey): Promise<T[]> {
   const { title, headers } = TABLES[table];
-  const res = await client().spreadsheets.values.get({
-    spreadsheetId: sheetId(),
-    range: `${title}!A2:${lastCol(table)}`,
-  });
+
+  let res;
+  try {
+    res = await client().spreadsheets.values.get({
+      spreadsheetId: sheetId(),
+      range: `${title}!A2:${lastCol(table)}`,
+    });
+  } catch (e) {
+    // 탭을 아직 안 만든 상태는 오류가 아니라 '데이터 없음'으로 본다.
+    // 이렇게 해야 설정을 끝내기 전에도 화면이 정상적으로 뜬다.
+    if (isMissingTab(e)) return [];
+    throw e;
+  }
 
   const values = res.data.values ?? [];
   return values
@@ -131,13 +153,18 @@ export async function appendRow(table: TableKey, data: Row): Promise<Row> {
 
   const values = [headers.map((h) => record[h] ?? '')];
 
-  await client().spreadsheets.values.append({
-    spreadsheetId: sheetId(),
-    range: `${title}!A:${lastCol(table)}`,
-    valueInputOption: 'RAW',
-    insertDataOption: 'INSERT_ROWS',
-    requestBody: { values },
-  });
+  try {
+    await client().spreadsheets.values.append({
+      spreadsheetId: sheetId(),
+      range: `${title}!A:${lastCol(table)}`,
+      valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody: { values },
+    });
+  } catch (e) {
+    if (isMissingTab(e)) throw new Error(NO_TAB_MESSAGE);
+    throw e;
+  }
 
   return record;
 }
@@ -207,6 +234,38 @@ async function tabGid(title: string): Promise<number | null> {
  * 스프레드시트에 필요한 탭과 헤더를 만든다. 이미 있으면 건드리지 않는다.
  * 최초 1회 /setup 화면에서 실행한다.
  */
+export interface SheetStatus {
+  connected: boolean;
+  title: string;
+  existing: string[];
+  missing: string[];
+  error: string | null;
+}
+
+/**
+ * 설정 화면용 연결 점검.
+ * 표를 읽어보는 대신 스프레드시트 자체를 조회하므로,
+ * 탭을 만들기 전에도 "연결은 됐고 탭만 없다"를 구분해서 알려줄 수 있다.
+ */
+export async function checkSheet(): Promise<SheetStatus> {
+  const empty = { connected: false, title: '', existing: [], missing: [] };
+  try {
+    const meta = await client().spreadsheets.get({ spreadsheetId: sheetId() });
+    const present = new Set((meta.data.sheets ?? []).map((s) => s.properties?.title ?? ''));
+    const wanted = (Object.keys(TABLES) as TableKey[]).map((k) => TABLES[k].title);
+
+    return {
+      connected: true,
+      title: meta.data.properties?.title ?? '',
+      existing: wanted.filter((t) => present.has(t)),
+      missing: wanted.filter((t) => !present.has(t)),
+      error: null,
+    };
+  } catch (e) {
+    return { ...empty, error: (e as Error).message };
+  }
+}
+
 export async function ensureTables(): Promise<{ created: string[]; existing: string[] }> {
   const meta = await client().spreadsheets.get({ spreadsheetId: sheetId() });
   const present = new Set(

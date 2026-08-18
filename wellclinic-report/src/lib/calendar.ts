@@ -109,7 +109,12 @@ export async function listEvents(
           });
         }
       } catch (e) {
-        errors.push(`${source.label}: ${(e as Error).message}`);
+        const raw = (e as Error).message;
+        // 구글은 캘린더 ID가 틀렸을 때도, 공유가 안 됐을 때도 똑같이 Not Found 를 준다
+        const hint = raw.includes('Not Found')
+          ? '캘린더 ID가 틀렸거나 서비스 계정에 공유되지 않았습니다. 캘린더 설정의 캘린더 통합 항목에서 캘린더 ID를 다시 확인해 주세요.'
+          : raw;
+        errors.push(`${source.label}: ${hint}`);
       }
     }),
   );
