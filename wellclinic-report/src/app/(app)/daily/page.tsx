@@ -41,6 +41,29 @@ export default async function DailyPage({
 
   const editing = params.edit ? dailyRes.rows.find((r) => r.id === params.edit) : undefined;
 
+  // 작성자 버튼에 붙일 건수 (기간·프로젝트 조건은 유지한 상태로 센다)
+  const scoped = reportsInRange(dailyRes.rows, from, to).filter(
+    (r) => !params.프로젝트 || r.프로젝트 === params.프로젝트,
+  );
+  const countByWriter = {
+    total: scoped.length,
+    byName: Object.fromEntries(
+      memberNames.map((n) => [n, scoped.filter((r) => r.작성자 === n).length]),
+    ) as Record<string, number>,
+  };
+
+  /** 지금 걸린 조건은 유지하고 작성자만 바꾼 주소를 만든다 */
+  const buildQuery = (patch: { 작성자?: string }) => {
+    const q = new URLSearchParams();
+    const writer = '작성자' in patch ? patch.작성자 : params.작성자;
+    if (writer) q.set('작성자', writer);
+    if (params.프로젝트) q.set('프로젝트', params.프로젝트);
+    if (params.from) q.set('from', params.from);
+    if (params.to) q.set('to', params.to);
+    const s = q.toString();
+    return s ? `/daily?${s}` : '/daily';
+  };
+
   // 날짜별로 묶어서 보여준다
   const byDate = new Map<string, typeof rows>();
   for (const r of rows) byDate.set(r.날짜, [...(byDate.get(r.날짜) ?? []), r]);
@@ -62,8 +85,14 @@ export default async function DailyPage({
         <Card title={`${formatKorean(editing.날짜)} 보고 수정`} className="mb-5">
           <ActionForm action={saveDailyReport} submitLabel="수정 저장">
             <input type="hidden" name="id" value={editing.id} />
-            <Row cols={3}>
+            <Row cols={4}>
               <Text name="날짜" label="날짜" type="date" defaultValue={editing.날짜} required />
+              <Select
+                name="작성자"
+                label="작성자"
+                options={memberNames}
+                defaultValue={editing.작성자}
+              />
               <Select
                 name="프로젝트"
                 label="프로젝트"
@@ -93,8 +122,14 @@ export default async function DailyPage({
       ) : (
         <Disclosure label="오늘 보고 작성하기" openLabel="오늘 보고 작성" defaultOpen>
           <ActionForm action={saveDailyReport} submitLabel="보고 저장" resetOnSuccess>
-            <Row cols={3}>
+            <Row cols={4}>
               <Text name="날짜" label="날짜" type="date" defaultValue={today} required />
+              <Select
+                name="작성자"
+                label="작성자"
+                options={memberNames}
+                defaultValue={session.name}
+              />
               <Select
                 name="프로젝트"
                 label="프로젝트"
@@ -185,6 +220,32 @@ export default async function DailyPage({
         </form>
       </Card>
 
+      <div className="no-print mb-4 flex flex-wrap gap-2">
+        <Link
+          href={buildQuery({ 작성자: undefined })}
+          className={`rounded-lg px-3 py-1.5 text-[13px] font-semibold ${
+            !params.작성자
+              ? 'bg-brand-600 text-white'
+              : 'border border-ink-200 bg-white text-ink-600'
+          }`}
+        >
+          전체 {countByWriter.total}
+        </Link>
+        {memberNames.map((name) => (
+          <Link
+            key={name}
+            href={buildQuery({ 작성자: name })}
+            className={`rounded-lg px-3 py-1.5 text-[13px] font-semibold ${
+              params.작성자 === name
+                ? 'bg-brand-600 text-white'
+                : 'border border-ink-200 bg-white text-ink-600'
+            }`}
+          >
+            {name} {countByWriter.byName[name] ?? 0}
+          </Link>
+        ))}
+      </div>
+
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-ink-500">
         <span>
           보고 <span className="font-semibold text-ink-800 tnum">{rows.length}</span>건
@@ -229,7 +290,7 @@ export default async function DailyPage({
                       </div>
                     )}
 
-                    {r.작성자 === session.name && (
+                    {(
                       <div className="no-print mt-4 flex items-center gap-2 border-t border-ink-100 pt-3">
                         <Link href={`/daily?edit=${r.id}`} className="btn-ghost px-3 py-1.5 text-[13px]">
                           수정

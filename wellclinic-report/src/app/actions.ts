@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requireSession } from '@/lib/auth';
+import { configuredMembers, requireSession } from '@/lib/auth';
 import { appendRow, deleteRow, readTable, updateRow } from '@/lib/sheets';
 import { todayKST } from '@/lib/date';
 import type { DailyReport, MonthlyReport } from '@/lib/schema';
@@ -41,9 +41,14 @@ export async function saveDailyReport(
 
     if (!done) throw new Error('오늘 한 일을 입력해 주세요.');
 
+    // 다른 팀원 대신 입력할 수 있게 작성자를 고를 수 있다.
+    // 목록에 없는 이름이 들어오면 로그인한 사람으로 되돌린다.
+    const picked = str(form, '작성자');
+    const writer = configuredMembers().some((m) => m.name === picked) ? picked : session.name;
+
     const payload = {
       날짜: date,
-      작성자: session.name,
+      작성자: writer,
       프로젝트: str(form, '프로젝트'),
       한일: done,
       내일계획: str(form, '내일계획'),
@@ -59,7 +64,7 @@ export async function saveDailyReport(
 
     // 같은 사람이 같은 날짜에 이미 썼으면 새로 만들지 않고 내용을 이어붙인다.
     const rows = await readTable<DailyReport>('daily');
-    const existing = rows.find((r) => r.날짜 === date && r.작성자 === session.name);
+    const existing = rows.find((r) => r.날짜 === date && r.작성자 === writer);
 
     if (existing) {
       await updateRow('daily', existing.id, {
