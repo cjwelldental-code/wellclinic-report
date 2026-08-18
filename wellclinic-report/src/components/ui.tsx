@@ -72,10 +72,6 @@ const STATUS_TONE: Record<string, Tone> = {
   검수: 'amber',
   완료: 'green',
   보류: 'neutral',
-  심의중: 'amber',
-  승인: 'green',
-  반려: 'red',
-  만료: 'red',
 };
 
 export function StatusBadge({ status }: { status: string }) {

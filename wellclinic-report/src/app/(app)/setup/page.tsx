@@ -17,6 +17,7 @@ const ENV_VARS = [
   { key: 'TEAM_MEMBERS', desc: '팀원 목록 (이름:역할, 쉼표로 구분)' },
   { key: 'TEAM_PASSWORD', desc: '팀 공용 로그인 비밀번호' },
   { key: 'SESSION_SECRET', desc: '세션 서명용 임의 문자열 (16자 이상)' },
+  { key: 'INGEST_TOKEN', desc: '매일 아침 자동 수집이 데이터를 보낼 때 쓰는 토큰' },
 ];
 
 export default async function SetupPage() {
@@ -127,8 +128,8 @@ export default async function SetupPage() {
         <ActionForm action={initSheet} submitLabel="탭 만들기 · 확인" pendingLabel="처리 중…">
           <ul className="grid gap-2 sm:grid-cols-2">
             {(Object.keys(TABLES) as TableKey[]).map((k) => (
-              <li key={k} className="rounded-lg bg-ink-50 px-3 py-2">
-                <p className="text-[13px] font-semibold text-ink-800">{TABLES[k].title}</p>
+              <li key={k} className="min-w-0 rounded-lg bg-ink-50 px-3 py-2">
+                <p className="truncate text-[13px] font-semibold text-ink-800">{TABLES[k].title}</p>
                 <p className="truncate text-[12px] text-ink-400">
                   {TABLES[k].headers.join(' · ')}
                 </p>
@@ -136,6 +137,29 @@ export default async function SetupPage() {
             ))}
           </ul>
         </ActionForm>
+      </Card>
+
+      <Card title="매일 아침 자동 수집 연동" className="mb-5">
+        <p className="mb-3 text-[14px] leading-relaxed text-ink-600">
+          매일 아침 도는 수집 작업이 아래 주소로 결과를 보내면, 시트에 자동으로 정리되고 광고 성과
+          화면에 바로 반영됩니다. 같은 날짜로 여러 번 보내도 덮어쓰기만 되고 중복이 쌓이지
+          않습니다.
+        </p>
+        <div className="rounded-lg bg-ink-50 p-4">
+          <p className="text-[12px] font-semibold text-ink-500">보내는 주소</p>
+          <code className="mt-1 block break-all font-mono text-[13px] text-ink-800">
+            POST /api/ingest
+          </code>
+          <p className="mt-3 text-[12px] font-semibold text-ink-500">인증 헤더</p>
+          <code className="mt-1 block break-all font-mono text-[13px] text-ink-800">
+            Authorization: Bearer &lt;INGEST_TOKEN&gt;
+          </code>
+        </div>
+        <p className="mt-3 text-[13px] text-ink-500">
+          {process.env.INGEST_TOKEN
+            ? 'INGEST_TOKEN 이 설정돼 있습니다. 본문 형식은 저장소의 DAILY-AGENT.md 를 참고하세요.'
+            : 'INGEST_TOKEN 이 아직 없습니다. Vercel 환경변수에 임의의 긴 문자열을 넣고 다시 배포해 주세요.'}
+        </p>
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2">

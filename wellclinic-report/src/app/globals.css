@@ -96,8 +96,9 @@ textarea.field {
          border border-red-200 bg-white text-red-600 hover:bg-red-50;
 }
 
+/* min-w-0 이 없으면 그리드 안에서 넓은 표가 카드를 밀어내 페이지가 가로로 넘친다 */
 .card {
-  @apply rounded-xl border border-ink-200 bg-white;
+  @apply min-w-0 rounded-xl border border-ink-200 bg-white;
 }
 
 /* 인쇄 — 월간보고를 그대로 출력해서 원장님께 드릴 수 있게 */

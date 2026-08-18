@@ -4,13 +4,16 @@ import { saveMonthlyReport } from '@/app/actions';
 import {
   formatNumber,
   formatWon,
+  getAdSpend,
   getDailyReports,
-  getMetrics,
+  getLeads,
   getMonthlyReports,
   getProjects,
-  metricsInMonth,
+  getRevenue,
+  monthSummary,
   reportsInMonth,
-  sumMetrics,
+  revenueSnapshot,
+  spendSnapshot,
 } from '@/lib/data';
 import { currentMonthKST, formatMonth, monthRange, shiftMonth } from '@/lib/date';
 import { Badge, Card, ConnectionError, PageHeader, Stat, StatusBadge } from '@/components/ui';
@@ -44,18 +47,23 @@ export default async function MonthlyPage({
   const prev = shiftMonth(month, -1);
   const { start, end } = monthRange(month);
 
-  const [dailyRes, projectRes, metricRes, monthlyRes] = await Promise.all([
+  const [dailyRes, projectRes, spendRes, revenueRes, leadRes, monthlyRes] = await Promise.all([
     getDailyReports(),
     getProjects(),
-    getMetrics(),
+    getAdSpend(),
+    getRevenue(),
+    getLeads(),
     getMonthlyReports(),
   ]);
 
-  const dataError = dailyRes.error ?? projectRes.error ?? metricRes.error ?? monthlyRes.error;
+  const dataError =
+    dailyRes.error ?? projectRes.error ?? spendRes.error ?? revenueRes.error ?? monthlyRes.error;
 
   const reports = reportsInMonth(dailyRes.rows, month);
-  const totals = sumMetrics(metricsInMonth(metricRes.rows, month));
-  const prevTotals = sumMetrics(metricsInMonth(metricRes.rows, prev));
+  const summary = monthSummary(spendRes.rows, revenueRes.rows, leadRes.rows, month);
+  const prevSummary = monthSummary(spendRes.rows, revenueRes.rows, leadRes.rows, prev);
+  const spend = spendSnapshot(spendRes.rows, month);
+  const revenue = revenueSnapshot(revenueRes.rows, month);
 
   // 작성자별 보고 일수
   const byWriter = [...new Set(reports.map((r) => r.작성자))].map((name) => ({
@@ -104,13 +112,20 @@ export default async function MonthlyPage({
     return `${pct >= 0 ? '+' : ''}${pct.toFixed(0)}%`;
   };
 
-  const metricDraft = totals.비용
+  const metricDraft = summary.광고비
     ? [
-        `광고비 ${formatWon(totals.비용)}`,
-        `노출 ${formatNumber(totals.노출)}`,
-        `클릭 ${formatNumber(totals.클릭)} (CTR ${totals.ctr.toFixed(2)}%)`,
-        `문의 ${formatNumber(totals.문의)}건 (CPA ${formatWon(totals.cpa)})`,
-        `예약 ${formatNumber(totals.예약)}건`,
+        `광고비 ${formatWon(summary.광고비)}`,
+        ...spend.byMedium.map(
+          (mm) => `  · ${mm.매체} ${formatWon(mm.지출)} / 결과 ${formatNumber(mm.결과)}건`,
+        ),
+        `신규 DB ${formatNumber(summary.신규DB)}건` +
+          (summary.dbCost ? ` (DB 단가 ${formatWon(summary.dbCost)})` : ''),
+        `확정매출 ${formatWon(summary.확정매출)} / 수납 ${formatWon(summary.수납금액)}`,
+        `ROAS ${summary.roas ? `${summary.roas.toFixed(1)}배` : '-'}`,
+        ...revenue.lines.map(
+          (l) =>
+            `  · ${l.채널} 내원 ${l.내원}명 / 동의 ${l.수술동의}건 / 확정 ${formatWon(l.확정매출)}`,
+        ),
       ].join('\n')
     : '';
 
@@ -146,16 +161,19 @@ export default async function MonthlyPage({
         />
         <Stat
           label="광고비"
-          value={formatNumber(totals.비용)}
+          value={formatNumber(summary.광고비)}
           unit="원"
-          hint={delta(totals.비용, prevTotals.비용) ? `전월 대비 ${delta(totals.비용, prevTotals.비용)}` : '전월 자료 없음'}
+          hint={
+            delta(summary.광고비, prevSummary.광고비)
+              ? `전월 대비 ${delta(summary.광고비, prevSummary.광고비)}`
+              : '전월 자료 없음'
+          }
         />
         <Stat
-          label="문의"
-          value={formatNumber(totals.문의)}
-          unit="건"
-          tone="brand"
-          hint={totals.문의 ? `CPA ${formatWon(totals.cpa)}` : '기록 없음'}
+          label="ROAS"
+          value={summary.roas ? `${summary.roas.toFixed(1)}배` : '—'}
+          tone={summary.roas >= 1 ? 'brand' : summary.roas > 0 ? 'red' : 'neutral'}
+          hint={summary.확정매출 ? `확정매출 ${formatWon(summary.확정매출)}` : '매출 수집 전'}
         />
       </div>
 
@@ -267,7 +285,7 @@ export default async function MonthlyPage({
             label="다음 달 계획"
             rows={5}
             defaultValue={saved?.다음달계획}
-            placeholder={'- 외국인 타깃 광고 심의 접수\n- 유튜브 Q&A 2편 촬영'}
+            placeholder={'- 외국인 타깃 광고 소재 3종 교체\n- 유튜브 Q&A 2편 촬영'}
           />
           <Area
             name="이슈및제안"

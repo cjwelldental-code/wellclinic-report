@@ -194,6 +194,69 @@ export async function updateRow(
   return merged;
 }
 
+/**
+ * 여러 행을 한 번에 넣거나 갱신한다.
+ * keyOf 로 만든 값이 같으면 같은 행으로 보고 덮어쓴다.
+ * 매일 아침 같은 날짜로 다시 돌려도 중복이 쌓이지 않게 하기 위한 것이다.
+ */
+export async function upsertRows(
+  table: TableKey,
+  incoming: Row[],
+  keyOf: (row: Row) => string,
+): Promise<{ inserted: number; updated: number }> {
+  const { title, headers } = TABLES[table];
+  const existing = await readTable(table);
+  const indexByKey = new Map(existing.map((row, i) => [keyOf(row), i]));
+
+  const updates: { range: string; values: string[][] }[] = [];
+  const appends: string[][] = [];
+  const now = new Date().toISOString();
+
+  for (const data of incoming) {
+    const key = keyOf(data);
+    const at = indexByKey.get(key);
+
+    if (at === undefined) {
+      const record: Row = { ...data };
+      record.id ||= crypto.randomUUID();
+      record.생성일시 ||= now;
+      record.수정일시 = now;
+      appends.push(headers.map((h) => record[h] ?? ''));
+    } else {
+      const merged: Row = { ...existing[at], ...data, 수정일시: now };
+      merged.id = existing[at].id;
+      const rowNumber = at + 2; // 헤더 1행 + 0-based 보정
+      updates.push({
+        range: `${title}!A${rowNumber}:${lastCol(table)}${rowNumber}`,
+        values: [headers.map((h) => merged[h] ?? '')],
+      });
+    }
+  }
+
+  try {
+    if (updates.length > 0) {
+      await client().spreadsheets.values.batchUpdate({
+        spreadsheetId: sheetId(),
+        requestBody: { valueInputOption: 'RAW', data: updates },
+      });
+    }
+    if (appends.length > 0) {
+      await client().spreadsheets.values.append({
+        spreadsheetId: sheetId(),
+        range: `${title}!A:${lastCol(table)}`,
+        valueInputOption: 'RAW',
+        insertDataOption: 'INSERT_ROWS',
+        requestBody: { values: appends },
+      });
+    }
+  } catch (e) {
+    if (isMissingTab(e)) throw new Error(NO_TAB_MESSAGE);
+    throw e;
+  }
+
+  return { inserted: appends.length, updated: updates.length };
+}
+
 /** id로 행을 찾아 실제로 삭제한다(행 자체를 제거). */
 export async function deleteRow(table: TableKey, id: string): Promise<boolean> {
   const rows = await readTable(table);

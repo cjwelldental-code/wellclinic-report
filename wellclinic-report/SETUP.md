@@ -90,7 +90,7 @@ git push -u origin main
 
 1. [vercel.com/new](https://vercel.com/new) 에서 방금 만든 저장소를 선택
 2. 프레임워크는 Next.js 로 자동 인식됩니다. 그대로 둡니다
-3. `Environment Variables` 에 아래 7개를 넣습니다
+3. `Environment Variables` 에 아래 8개를 넣습니다
 
 | 이름 | 값 |
 |---|---|
@@ -101,6 +101,7 @@ git push -u origin main
 | `TEAM_MEMBERS` | `이하늘:팀장,홍길동:디자이너` 형식 |
 | `TEAM_PASSWORD` | 팀에서 쓸 공용 비밀번호 |
 | `SESSION_SECRET` | 아무 임의 문자열 32자 이상 |
+| `INGEST_TOKEN` | 매일 아침 자동 수집용 토큰. 아무 임의 문자열 |
 
 `SESSION_SECRET` 은 아래 명령으로 만들 수 있습니다.
 
@@ -119,7 +120,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 3. 구글 시트 / 구글 캘린더 상태가 모두 `정상` 인지 확인
 4. `탭 만들기 · 확인` 버튼 클릭
 
-`프로젝트`, `일일보고`, `월간보고`, `광고성과`, `심의관리` 탭이 만들어집니다.
+`프로젝트`, `일일보고`, `월간보고`, `신규DB`, `광고비`, `매출`, `청구잔액` 탭이 만들어집니다.
 
 ---
 

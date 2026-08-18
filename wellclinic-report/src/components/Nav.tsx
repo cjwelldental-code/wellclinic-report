@@ -11,7 +11,6 @@ const NAV = [
   { href: '/calendar', label: '일정', icon: '▤' },
   { href: '/monthly', label: '월간보고', icon: '▣' },
   { href: '/metrics', label: '광고 성과', icon: '◔' },
-  { href: '/compliance', label: '심의 관리', icon: '✓' },
 ];
 
 function isActive(pathname: string, href: string) {

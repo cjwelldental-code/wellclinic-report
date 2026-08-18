@@ -8,8 +8,10 @@ export type TableKey =
   | 'projects'
   | 'daily'
   | 'monthly'
-  | 'metrics'
-  | 'compliance';
+  | 'leads'
+  | 'adspend'
+  | 'revenue'
+  | 'balance';
 
 export const TABLES: Record<TableKey, { title: string; headers: string[] }> = {
   projects: {
@@ -34,24 +36,53 @@ export const TABLES: Record<TableKey, { title: string; headers: string[] }> = {
       '이슈및제안', '생성일시', '수정일시',
     ],
   },
-  metrics: {
-    title: '광고성과',
+
+  // --- 매일 아침 자동 수집 ---
+
+  /** 신규 DB. 하루 한 행. */
+  leads: {
+    title: '신규DB',
     headers: [
-      'id', '날짜', '매체', '캠페인', '노출', '클릭', '비용',
-      '문의', '예약', '메모', '생성일시',
+      'id', '날짜', 'dbcart', '디지털패키지', '러시아', '베트남',
+      '합계', '생성일시', '수정일시',
     ],
   },
-  compliance: {
-    title: '심의관리',
+
+  /**
+   * 광고비. 매일 아침 "이번 달 누적(MTD)" 스냅샷을 기록한다.
+   * 캠페인이 '총계'인 행이 그 매체의 합계(구글은 일시중지 포함 Total 행).
+   * 하루치 소진액은 어제 스냅샷과의 차이로 계산한다.
+   */
+  adspend: {
+    title: '광고비',
     headers: [
-      'id', '소재명', '매체', '심의번호', '심의일', '만료일',
-      '상태', '담당자', '비고', '생성일시',
+      'id', '기록일', '연월', '매체', '캠페인', '지출', '결과',
+      '생성일시', '수정일시',
+    ],
+  },
+
+  /** 확정매출. 매일 아침 이번 달 채널별 스냅샷을 기록한다. */
+  revenue: {
+    title: '매출',
+    headers: [
+      'id', '기록일', '연월', '채널', '예약', '예약취소', '내원',
+      '수술동의', '견적금액', '확정매출', '수납금액',
+      '생성일시', '수정일시',
+    ],
+  },
+
+  /** 광고 계정 청구 잔액. 매일 아침 매체별 스냅샷. */
+  balance: {
+    title: '청구잔액',
+    headers: [
+      'id', '기록일', '매체', '잔액', '예상세금', '결제수단', '다음결제',
+      '생성일시', '수정일시',
     ],
   },
 };
 
 // ---------------------------------------------------------------------------
-// 도메인 타입
+// 업무 관리
 // ---------------------------------------------------------------------------
 
 export const PROJECT_STATUSES = ['기획', '진행중', '검수', '완료', '보류'] as const;
@@ -59,6 +90,9 @@ export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
 export const PRIORITIES = ['높음', '보통', '낮음'] as const;
 export type Priority = (typeof PRIORITIES)[number];
+
+/** 클라이언트 목록 — 웰치과 내부용이지만 원내 브랜드가 나뉠 수 있어 열어둔다. */
+export const CLIENTS = ['웰치과', '웰플란트', '공통'] as const;
 
 export type Project = {
   id: string;
@@ -102,38 +136,73 @@ export type MonthlyReport = {
   수정일시: string;
 };
 
-export const CHANNELS = [
-  '메타', '구글', '네이버', '모두닥', '유튜브', '카카오', '기타',
-] as const;
+// ---------------------------------------------------------------------------
+// 광고 성과
+// ---------------------------------------------------------------------------
 
-export type AdMetric = {
+/** 신규 DB 유입 경로 */
+export const LEAD_SOURCES = ['dbcart', '디지털패키지', '러시아', '베트남'] as const;
+export type LeadSource = (typeof LEAD_SOURCES)[number];
+
+/** 광고 매체 */
+export const MEDIA = ['메타', '구글'] as const;
+export type Medium = (typeof MEDIA)[number];
+
+/** 매체 합계 행을 나타내는 캠페인 이름 */
+export const TOTAL_ROW = '총계';
+
+/** 매출 집계 채널 */
+export const REVENUE_CHANNELS = ['베트남', '러시아', '스트라우만', '디지털패키지'] as const;
+export type RevenueChannel = (typeof REVENUE_CHANNELS)[number];
+
+export type LeadRow = {
   id: string;
   날짜: string;
+  dbcart: string;
+  디지털패키지: string;
+  러시아: string;
+  베트남: string;
+  합계: string;
+  생성일시: string;
+  수정일시: string;
+};
+
+export type AdSpendRow = {
+  id: string;
+  기록일: string;
+  연월: string;
   매체: string;
   캠페인: string;
-  노출: string;
-  클릭: string;
-  비용: string;
-  문의: string;
-  예약: string;
-  메모: string;
+  지출: string;
+  결과: string;
   생성일시: string;
+  수정일시: string;
 };
 
-export const COMPLIANCE_STATUSES = ['심의중', '승인', '반려', '만료'] as const;
-
-export type ComplianceItem = {
+export type RevenueRow = {
   id: string;
-  소재명: string;
-  매체: string;
-  심의번호: string;
-  심의일: string;
-  만료일: string;
-  상태: string;
-  담당자: string;
-  비고: string;
+  기록일: string;
+  연월: string;
+  채널: string;
+  예약: string;
+  예약취소: string;
+  내원: string;
+  수술동의: string;
+  견적금액: string;
+  확정매출: string;
+  수납금액: string;
   생성일시: string;
+  수정일시: string;
 };
 
-/** 클라이언트 목록 — 웰치과 내부용이지만 원내 브랜드가 나뉠 수 있어 열어둔다. */
-export const CLIENTS = ['웰치과', '웰플란트', '공통'] as const;
+export type BalanceRow = {
+  id: string;
+  기록일: string;
+  매체: string;
+  잔액: string;
+  예상세금: string;
+  결제수단: string;
+  다음결제: string;
+  생성일시: string;
+  수정일시: string;
+};

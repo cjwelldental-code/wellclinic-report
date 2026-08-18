@@ -2,16 +2,14 @@ import Link from 'next/link';
 import { requireSession } from '@/lib/auth';
 import {
   activeProjects,
-  complianceAlerts,
-  formatNumber,
-  formatWon,
-  getCompliance,
+  formatCompactWon,
+  getAdSpend,
   getDailyReports,
-  getMetrics,
+  getLeads,
   getProjects,
-  metricsInMonth,
+  getRevenue,
+  monthSummary,
   reportsInRange,
-  sumMetrics,
 } from '@/lib/data';
 import { listEvents } from '@/lib/calendar';
 import {
@@ -45,15 +43,16 @@ export default async function DashboardPage() {
   const weekStart = startOfWeek(today);
   const weekEnd = addDays(weekStart, 6);
 
-  const [projectsRes, dailyRes, metricsRes, complianceRes, calendarRes] = await Promise.all([
+  const [projectsRes, dailyRes, spendRes, revenueRes, leadRes, calendarRes] = await Promise.all([
     getProjects(),
     getDailyReports(),
-    getMetrics(),
-    getCompliance(),
+    getAdSpend(),
+    getRevenue(),
+    getLeads(),
     listEvents(today, addDays(today, 13)),
   ]);
 
-  const dataError = projectsRes.error ?? dailyRes.error ?? metricsRes.error ?? complianceRes.error;
+  const dataError = projectsRes.error ?? dailyRes.error ?? spendRes.error ?? revenueRes.error;
 
   const running = activeProjects(projectsRes.rows);
   const myWeek = reportsInRange(dailyRes.rows, weekStart, weekEnd).filter(
@@ -61,8 +60,7 @@ export default async function DashboardPage() {
   );
   const writtenToday = myWeek.some((r) => r.날짜 === today);
   const recent = reportsInRange(dailyRes.rows, addDays(today, -14), today).slice(0, 6);
-  const monthTotals = sumMetrics(metricsInMonth(metricsRes.rows, month));
-  const alerts = complianceAlerts(complianceRes.rows);
+  const summary = monthSummary(spendRes.rows, revenueRes.rows, leadRes.rows, month);
 
   // 마감이 2주 안으로 남았거나 이미 지난 진행 프로젝트
   const dueSoon = running
@@ -132,41 +130,21 @@ export default async function DashboardPage() {
         />
         <Stat
           label={`${formatMonth(month)} 광고비`}
-          value={formatNumber(monthTotals.비용)}
-          unit="원"
-          hint={monthTotals.문의 ? `문의 ${monthTotals.문의}건 · CPA ${formatWon(monthTotals.cpa)}` : '문의 기록 없음'}
+          value={summary.광고비 ? formatCompactWon(summary.광고비) : '—'}
+          unit={summary.광고비 ? '원' : undefined}
+          hint={summary.신규DB ? `신규 DB ${summary.신규DB}건` : '수집 자료 없음'}
         />
         <Stat
-          label="심의 만료 임박"
-          value={alerts.length}
-          unit="건"
-          tone={alerts.length > 0 ? 'red' : 'neutral'}
-          hint="30일 이내"
+          label="이번 달 ROAS"
+          value={summary.roas ? `${summary.roas.toFixed(1)}배` : '—'}
+          tone={summary.roas >= 1 ? 'brand' : summary.roas > 0 ? 'red' : 'neutral'}
+          hint={
+            summary.확정매출
+              ? `확정매출 ${formatCompactWon(summary.확정매출)}원`
+              : '매출 수집 전'
+          }
         />
       </div>
-
-      {alerts.length > 0 && (
-        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4">
-          <p className="font-heading text-[15px] text-red-700">의료광고 심의 만료 확인 필요</p>
-          <ul className="mt-2 space-y-1 text-[14px] text-red-700">
-            {alerts.slice(0, 4).map((c) => {
-              const d = daysUntil(c.만료일);
-              return (
-                <li key={c.id} className="flex flex-wrap items-center gap-x-2">
-                  <span className="font-semibold">{c.소재명}</span>
-                  <span className="opacity-70">{c.매체}</span>
-                  <span className="tnum">
-                    {d !== null && d < 0 ? `${Math.abs(d)}일 지남` : `${d}일 남음`} ({c.만료일})
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-          <Link href="/compliance" className="mt-2 inline-block text-[13px] font-semibold underline">
-            심의 관리로 이동
-          </Link>
-        </div>
-      )}
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Card

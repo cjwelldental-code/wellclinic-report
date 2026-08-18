@@ -23,8 +23,8 @@ export const config = {
   matcher: [
     /*
      * 아래를 제외한 모든 경로를 보호한다:
-     * login, api/auth, _next 정적 자산, favicon
+     * login, api/auth, api/ingest(토큰으로 따로 인증), _next 정적 자산, favicon
      */
-    '/((?!login|api/auth|_next/static|_next/image|favicon.ico).*)',
+    '/((?!login|api/auth|api/ingest|_next/static|_next/image|favicon.ico).*)',
   ],
 };
