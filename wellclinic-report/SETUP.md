@@ -96,7 +96,7 @@ git push -u origin main
 |---|---|
 | `GOOGLE_SHEET_ID` | 1단계에서 복사한 ID |
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | JSON의 `client_email` |
-| `GOOGLE_PRIVATE_KEY` | JSON의 `private_key` 값 전체 (`-----BEGIN` 부터 `-----END PRIVATE KEY-----\n` 까지) |
+| `GOOGLE_PRIVATE_KEY` | JSON의 `private_key` 값 전체. 앞뒤 따옴표는 있어도 되고 없어도 됩니다 |
 | `GOOGLE_CALENDAR_IDS` | `웰치과=<캘린더ID>` 형식 |
 | `TEAM_MEMBERS` | `이하늘:팀장,홍길동:디자이너` 형식 |
 | `TEAM_PASSWORD` | 팀에서 쓸 공용 비밀번호 |
@@ -129,7 +129,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 |---|---|
 | `The caller does not have permission` | 3단계 시트 공유를 안 했습니다. `client_email` 을 편집자로 초대하세요 |
 | `Requested entity was not found` | `GOOGLE_SHEET_ID` 나 캘린더 ID가 틀렸습니다 |
-| `error:1E08010C:DECODER routines` | `GOOGLE_PRIVATE_KEY` 를 붙여넣을 때 앞뒤가 잘렸습니다. `-----BEGIN` 부터 끝까지 통째로 넣으세요 |
+| `GOOGLE_PRIVATE_KEY 형식이 올바르지 않습니다` | 키가 잘렸습니다. `-----BEGIN` 부터 `-----END PRIVATE KEY-----` 까지 통째로 넣으세요. 앞뒤 따옴표나 줄바꿈 형태는 앱이 알아서 처리합니다 |
 | `SESSION_SECRET 환경변수(16자 이상)가 필요합니다` | 값이 없거나 너무 짧습니다 |
 | 캘린더만 비어 있음 | 캘린더 공유를 안 했거나 `GOOGLE_CALENDAR_IDS` 형식이 `이름=ID` 가 아닙니다 |
 | 환경변수를 고쳤는데 그대로 | Vercel은 재배포해야 반영됩니다. `Deployments` → 최신 항목 → `Redeploy` |

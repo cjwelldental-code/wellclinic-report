@@ -14,8 +14,43 @@ const SCOPES = [
 
 let cached: sheets_v4.Sheets | null = null;
 
+const BEGIN = '-----BEGIN';
+const END_MARKER = 'PRIVATE KEY-----';
+
+/**
+ * 서비스 계정 비공개 키를 PEM 형태로 정리한다.
+ * 환경변수에 붙여넣는 방식이 사람마다 달라서 아래 경우를 모두 받아 준다.
+ *  - JSON의 값만 복사 (줄바꿈이 \n 문자로 들어옴)
+ *  - 앞뒤 따옴표까지 같이 복사
+ *  - 실제 줄바꿈이 살아 있는 상태로 복사
+ *  - JSON 파일 내용을 통째로 붙여넣음
+ */
+export function normalizePrivateKey(raw: string): string {
+  let key = raw.trim();
+
+  // JSON 파일을 통째로 붙여넣은 경우 private_key 만 꺼낸다
+  if (key.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(key) as { private_key?: string };
+      if (parsed.private_key) key = parsed.private_key.trim();
+    } catch {
+      // JSON이 아니면 아래 로직으로 계속 진행한다
+    }
+  }
+
+  // 앞뒤를 감싼 따옴표 제거
+  if (key.length > 1 && /^["'].*["']$/s.test(key)) {
+    key = key.slice(1, -1).trim();
+  }
+
+  // \n 문자열로 들어온 줄바꿈을 실제 줄바꿈으로 되돌린다
+  key = key.replace(/\\r/g, '').replace(/\\n/g, '\n').replace(/\r/g, '').trim();
+
+  return `${key}\n`;
+}
+
 export function getAuth() {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
   const rawKey = process.env.GOOGLE_PRIVATE_KEY;
 
   if (!email || !rawKey) {
@@ -24,8 +59,16 @@ export function getAuth() {
     );
   }
 
-  // Vercel 환경변수에 붙여넣으면 줄바꿈이 \n 문자열로 들어온다.
-  const key = rawKey.replace(/\n/g, '\n');
+  const key = normalizePrivateKey(rawKey);
+
+  // 형식이 깨졌으면 OpenSSL의 알아보기 힘든 오류 대신 무엇이 잘못됐는지 알려 준다
+  if (!key.startsWith(BEGIN) || !key.trimEnd().endsWith(END_MARKER)) {
+    throw new Error(
+      'GOOGLE_PRIVATE_KEY 형식이 올바르지 않습니다. ' +
+        '서비스 계정 JSON의 private_key 값을 -----BEGIN 부터 -----END PRIVATE KEY----- 까지 ' +
+        '앞뒤 따옴표 없이 통째로 넣어 주세요.',
+    );
+  }
 
   return new google.auth.JWT({ email, key, scopes: SCOPES });
 }
