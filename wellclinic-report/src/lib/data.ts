@@ -4,7 +4,6 @@ import {
   LEAD_SOURCES,
   MEDIA,
   REVENUE_CHANNELS,
-  TOTAL_ROW,
   type AdSpendRow,
   type BalanceRow,
   type DailyReport,
@@ -122,6 +121,27 @@ export function sumLeads(rows: LeadRow[]): { total: number; bySource: Record<str
 // 광고비 (매일 아침 MTD 스냅샷)
 // ---------------------------------------------------------------------------
 
+/**
+ * 수집 과정에서 보고서 표의 소계·합계 줄이 캠페인 이름처럼 섞여 들어오는 일이 있다.
+ * (예: '__소계__', '__합계__', 'Total')
+ * 이걸 캠페인으로 세면 같은 금액을 두 번 더하게 되므로 반드시 걸러낸다.
+ */
+const TOTAL_LABELS = new Set([
+  '총계', '합계', '소계', '총합', '총지출', '총결과',
+  'total', 'totals', 'grandtotal', 'subtotal', 'sum',
+]);
+
+/** 매체 칸에 '전체'처럼 실제 매체가 아닌 값이 들어온 행 */
+const AGGREGATE_MEDIA = new Set(['전체', '합계', '총계', '총합', 'total', 'all']);
+
+const flatten = (v: string) =>
+  String(v ?? '')
+    .replace(/[_\s·・\-–—]/g, '')
+    .toLowerCase();
+
+export const isTotalLabel = (v: string) => TOTAL_LABELS.has(flatten(v));
+export const isAggregateMedium = (v: string) => AGGREGATE_MEDIA.has(flatten(v));
+
 /** 해당 달에서 가장 최근 기록일 */
 export function latestSpendDate(rows: AdSpendRow[], month: string): string | null {
   const dates = rows.filter((r) => r.연월 === month).map((r) => r.기록일);
@@ -144,22 +164,22 @@ export interface SpendSnapshot {
   cpa: number;
 }
 
-/** 특정 달의 최신 스냅샷을 매체별로 정리한다. */
-export function spendSnapshot(rows: AdSpendRow[], month: string): SpendSnapshot {
-  const 기록일 = latestSpendDate(rows, month);
-  const empty: SpendSnapshot = { 기록일, byMedium: [], 지출: 0, 결과: 0, cpa: 0 };
-  if (!기록일) return empty;
+/** 특정 기록일 하나를 매체별로 정리한다. */
+export function spendAt(rows: AdSpendRow[], month: string, 기록일: string): SpendSnapshot {
+  // 매체 칸이 '전체'인 행은 이미 매체 합을 다시 합친 값이라 여기서 버린다.
+  // 아래에서 매체별로 다시 더하므로 그대로 두면 두 번 세게 된다.
+  const snap = rows.filter(
+    (r) => r.기록일 === 기록일 && r.연월 === month && !isAggregateMedium(r.매체),
+  );
 
-  const snap = rows.filter((r) => r.기록일 === 기록일 && r.연월 === month);
-  const media = [...MEDIA].filter((m) => snap.some((r) => r.매체 === m));
-  // 시트에 예상 못한 매체가 들어와도 빠뜨리지 않는다
-  for (const r of snap) if (!media.includes(r.매체 as never)) media.push(r.매체 as never);
+  const media: string[] = [...MEDIA].filter((m) => snap.some((r) => r.매체 === m));
+  for (const r of snap) if (r.매체 && !media.includes(r.매체)) media.push(r.매체);
 
   const byMedium = media.map((매체) => {
     const all = snap.filter((r) => r.매체 === 매체);
-    const totalRow = all.find((r) => r.캠페인 === TOTAL_ROW);
+    const totalRow = all.find((r) => isTotalLabel(r.캠페인));
     const lines = all
-      .filter((r) => r.캠페인 !== TOTAL_ROW)
+      .filter((r) => !isTotalLabel(r.캠페인))
       .map((r) => ({
         매체,
         캠페인: r.캠페인 || '(이름 없음)',
@@ -169,7 +189,8 @@ export function spendSnapshot(rows: AdSpendRow[], month: string): SpendSnapshot 
       }))
       .sort((a, b) => b.지출 - a.지출);
 
-    // 총계 행이 있으면 그것을 쓴다. 구글은 일시중지 캠페인까지 포함된 값이라 합산과 다를 수 있다.
+    // 총계 행이 있으면 그것만 쓴다. 구글은 일시중지 캠페인까지 포함된 값이라
+    // 캠페인 합과 다를 수 있고, 그럴 때는 총계 쪽이 맞다.
     const 지출 = totalRow ? num(totalRow.지출) : lines.reduce((s, l) => s + l.지출, 0);
     const 결과 = totalRow ? num(totalRow.결과) : lines.reduce((s, l) => s + l.결과, 0);
 
@@ -182,16 +203,18 @@ export function spendSnapshot(rows: AdSpendRow[], month: string): SpendSnapshot 
   return { 기록일, byMedium, 지출, 결과, cpa: 결과 ? 지출 / 결과 : 0 };
 }
 
+/** 특정 달의 최신 스냅샷을 매체별로 정리한다. */
+export function spendSnapshot(rows: AdSpendRow[], month: string): SpendSnapshot {
+  const 기록일 = latestSpendDate(rows, month);
+  if (!기록일) return { 기록일, byMedium: [], 지출: 0, 결과: 0, cpa: 0 };
+  return spendAt(rows, month, 기록일);
+}
+
 /** 날짜별 MTD 누적 지출 (같은 달 안에서만) */
 export function spendTimeline(rows: AdSpendRow[], month: string): { 날짜: string; 누적: number }[] {
-  const byDate = new Map<string, number>();
-  for (const r of rows) {
-    if (r.연월 !== month || r.캠페인 !== TOTAL_ROW) continue;
-    byDate.set(r.기록일, (byDate.get(r.기록일) ?? 0) + num(r.지출));
-  }
-  return [...byDate.entries()]
-    .map(([날짜, 누적]) => ({ 날짜, 누적 }))
-    .sort((a, b) => a.날짜.localeCompare(b.날짜));
+  const dates = [...new Set(rows.filter((r) => r.연월 === month).map((r) => r.기록일))].sort();
+  // 합계 계산은 화면과 똑같은 규칙을 써야 하므로 spendAt 을 그대로 재사용한다
+  return dates.map((날짜) => ({ 날짜, 누적: spendAt(rows, month, 날짜).지출 }));
 }
 
 /**

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { upsertRows, type Row } from '@/lib/sheets';
 import { LEAD_SOURCES, TOTAL_ROW } from '@/lib/schema';
+import { isTotalLabel } from '@/lib/data';
 import { isValidDate, todayKST } from '@/lib/date';
 
 export const dynamic = 'force-dynamic';
@@ -87,23 +88,34 @@ export async function POST(request: NextRequest) {
       if (!block) continue;
 
       const detail = Array.isArray(block.세부) ? (block.세부 as Json[]) : [];
-      for (const line of detail) {
-        const 캠페인 = asText(line.캠페인);
-        if (!캠페인 || 캠페인 === TOTAL_ROW) continue;
+
+      // 보고서 표의 소계·합계 줄이 세부에 섞여 오는 경우가 있다.
+      // 캠페인으로 저장하면 나중에 두 번 세게 되므로 여기서 갈라낸다.
+      const campaigns = detail.filter(
+        (l) => asText(l.캠페인) && !isTotalLabel(asText(l.캠페인)),
+      );
+      const totalFromDetail = detail.find((l) => isTotalLabel(asText(l.캠페인)));
+      if (detail.length !== campaigns.length) {
+        warnings.push(`${medium}: 세부에 섞여 있던 소계 줄을 제외했습니다.`);
+      }
+
+      for (const line of campaigns) {
         spendRows.push({
-          기록일, 연월: spendMonth, 매체: medium, 캠페인,
+          기록일, 연월: spendMonth, 매체: medium, 캠페인: asText(line.캠페인),
           지출: asNumber(line.지출) || '0',
           결과: asNumber(line.결과) || '0',
         });
       }
 
       // 총계 행. 구글은 일시중지 캠페인까지 포함된 Total 값이 들어온다.
-      const 총지출 = asNumber(block.총지출);
-      const 총결과 = asNumber(block.총결과);
+      // 총지출이 없으면 세부에 섞여 있던 소계 줄을, 그것도 없으면 캠페인 합을 쓴다.
+      const sum = (key: '지출' | '결과') =>
+        String(campaigns.reduce((s, l) => s + Number(asNumber(l[key]) || 0), 0));
+
       spendRows.push({
         기록일, 연월: spendMonth, 매체: medium, 캠페인: TOTAL_ROW,
-        지출: 총지출 || String(detail.reduce((s, l) => s + Number(asNumber(l.지출) || 0), 0)),
-        결과: 총결과 || String(detail.reduce((s, l) => s + Number(asNumber(l.결과) || 0), 0)),
+        지출: asNumber(block.총지출) || asNumber(totalFromDetail?.지출) || sum('지출'),
+        결과: asNumber(block.총결과) || asNumber(totalFromDetail?.결과) || sum('결과'),
       });
     }
 
