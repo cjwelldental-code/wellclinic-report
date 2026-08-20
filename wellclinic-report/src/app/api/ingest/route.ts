@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { upsertRows, type Row } from '@/lib/sheets';
-import { LEAD_SOURCES, TOTAL_ROW } from '@/lib/schema';
-import { isTotalLabel } from '@/lib/data';
-import { isValidDate, todayKST } from '@/lib/date';
+import { readTable, upsertRows, type Row } from '@/lib/sheets';
+import { LEAD_SOURCES, TOTAL_ROW, type LeadRow } from '@/lib/schema';
+import { isTotalLabel, leadCoverage } from '@/lib/data';
+import { isValidDate, shiftMonth, todayKST } from '@/lib/date';
 
 export const dynamic = 'force-dynamic';
 
@@ -191,7 +191,12 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ ok: true, 기록일, 저장: result, warnings });
 }
 
-/** 연결 확인용 */
+/**
+ * 연결 확인 + 수집 상태.
+ *
+ * 아침에 수집을 돌릴 때 이걸 먼저 부르면 "어느 날짜가 비었는지"를 그대로 받는다.
+ * 마지막 실행일을 따로 기억할 필요 없이, 받은 날짜만 조회해서 채우면 된다.
+ */
 export async function GET(request: NextRequest) {
   const expected = process.env.INGEST_TOKEN;
   const header = request.headers.get('authorization') ?? '';
@@ -202,5 +207,50 @@ export async function GET(request: NextRequest) {
   }
   if (token !== expected) return unauthorized('토큰이 올바르지 않습니다.');
 
-  return NextResponse.json({ ok: true, message: '연결 정상', 오늘: todayKST() });
+  const 오늘 = todayKST();
+  const 이번달 = 오늘.slice(0, 7);
+  const 지난달 = shiftMonth(이번달, -1);
+
+  try {
+    const [leads, spend, revenue, balance] = await Promise.all([
+      readTable<LeadRow>('leads'),
+      readTable('adspend'),
+      readTable('revenue'),
+      readTable('balance'),
+    ]);
+
+    // 달이 막 넘어간 직후에는 지난달 말일이 비어 있을 수 있어 지난달까지 함께 본다.
+    // DATA_START 이전은 애초에 수집 대상이 아니므로 leadCoverage 가 알아서 제외한다.
+    const 빠진날짜 = [
+      ...leadCoverage(leads, 지난달, 오늘).빠진날짜,
+      ...leadCoverage(leads, 이번달, 오늘).빠진날짜,
+    ].sort();
+
+    const last = (rows: { 기록일: string }[]) =>
+      rows.length ? rows.map((r) => r.기록일).sort().at(-1)! : null;
+
+    return NextResponse.json({
+      ok: true,
+      message: '연결 정상',
+      오늘,
+      이번달,
+      신규DB: {
+        빠진날짜,
+        설명:
+          빠진날짜.length === 0
+            ? '빠진 날짜가 없습니다. 어제까지 모두 채워져 있습니다.'
+            : `${빠진날짜.length}일치가 비어 있습니다. 이번 달 1일부터 어제까지 통째로 조회해 보내면 한 번에 정리됩니다.`,
+      },
+      마지막수집: {
+        광고비: last(spend as { 기록일: string }[]),
+        매출: last(revenue as { 기록일: string }[]),
+        청구잔액: last(balance as { 기록일: string }[]),
+      },
+    });
+  } catch (e) {
+    return NextResponse.json(
+      { ok: false, error: (e as Error).message, 오늘 },
+      { status: 500 },
+    );
+  }
 }

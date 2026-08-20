@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Fragment } from 'react';
 import {
+  buildSeries,
   dailySpend,
   formatNumber,
   formatWon,
@@ -16,22 +17,31 @@ import {
   revenueSnapshot,
   spendSnapshot,
   sumLeads,
+  type Bucket,
 } from '@/lib/data';
 import { currentMonthKST, formatKorean, formatMonth, shiftMonth } from '@/lib/date';
 import { LEAD_SOURCES } from '@/lib/schema';
 import { Badge, Card, ConnectionError, Empty, PageHeader, Stat } from '@/components/ui';
 import { PrintButton } from '@/components/PrintButton';
+import { TrendChart } from '@/components/Chart';
 
 export const dynamic = 'force-dynamic';
+
+const BUCKETS = [
+  { key: 'day', label: '일별' },
+  { key: 'week', label: '주별' },
+  { key: 'month', label: '월별' },
+] as const;
 
 export default async function MetricsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ m?: string }>;
+  searchParams: Promise<{ m?: string; v?: string }>;
 }) {
-  const { m } = await searchParams;
+  const { m, v } = await searchParams;
   const month = /^\d{4}-\d{2}$/.test(m ?? '') ? (m as string) : currentMonthKST();
   const prev = shiftMonth(month, -1);
+  const bucket: Bucket = v === 'week' || v === 'month' ? v : 'day';
 
   const [spendRes, revenueRes, leadRes, balanceRes] = await Promise.all([
     getAdSpend(),
@@ -52,6 +62,17 @@ export default async function MetricsPage({
   const balances = latestBalances(balanceRes.rows);
 
   const hasData = summary.광고비 > 0 || summary.확정매출 > 0 || leads.length > 0;
+
+  const series = buildSeries(bucket, spendRes.rows, revenueRes.rows, leadRes.rows, month);
+  const bucketName = BUCKETS.find((b) => b.key === bucket)!.label;
+  const isMonthly = bucket === 'month';
+
+  const cov = summary.coverage;
+  // 빠진 날이 많으면 다 나열하지 않고 앞쪽만 보여 준다
+  const missingLabel =
+    cov.빠진날짜.length > 10
+      ? `${cov.빠진날짜.slice(0, 8).map((d) => formatKorean(d, false)).join(', ')} 외 ${cov.빠진날짜.length - 8}일`
+      : cov.빠진날짜.map((d) => formatKorean(d, false)).join(', ');
 
   const delta = (now: number, before: number) => {
     if (!before) return undefined;
@@ -113,21 +134,115 @@ export default async function MetricsPage({
           label="신규 DB"
           value={formatNumber(summary.신규DB)}
           unit="건"
-          hint={`${leads.length}일 집계`}
+          tone={cov.빠진날짜.length > 0 ? 'red' : 'neutral'}
+          hint={
+            cov.시작
+              ? `${formatKorean(cov.시작, false)}~${formatKorean(cov.끝!, false)} · ${cov.수집일수}일치`
+              : '수집 자료 없음'
+          }
         />
         <Stat
           label="DB 단가"
-          value={summary.dbCost ? formatNumber(summary.dbCost) : '—'}
-          unit={summary.dbCost ? '원' : undefined}
-          hint={summary.결과 ? `광고 결과 ${formatNumber(summary.결과)}건` : undefined}
+          value={summary.dbCost !== null ? formatNumber(summary.dbCost) : '—'}
+          unit={summary.dbCost !== null ? '원' : undefined}
+          hint={
+            summary.dbCost === null && summary.신규DB > 0
+              ? '수집 누락으로 계산 보류'
+              : summary.결과
+                ? `광고 결과 ${formatNumber(summary.결과)}건`
+                : undefined
+          }
         />
       </div>
 
       {summary.기록일 && (
-        <p className="mb-6 text-[12px] text-ink-400 tnum">
+        <p className="mb-4 text-[12px] text-ink-400 tnum">
           최종 수집 {formatKorean(summary.기록일)} 기준
         </p>
       )}
+
+      {cov.빠진날짜.length > 0 && (
+        <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
+          신규 DB가 {cov.기대일수}일 중 {cov.수집일수}일치만 들어와 있어 이 달 합계는 실제보다
+          적습니다. 아침 수집을 한 번 돌리면 채워집니다.
+          <span className="ml-1 tnum opacity-80">(빠진 날 {missingLabel})</span>
+        </div>
+      )}
+
+      <Card
+        title={`${isMonthly ? '월별' : `${formatMonth(month)} ${bucketName}`} 추이`}
+        className="mb-5"
+        action={
+          <div className="no-print flex gap-1">
+            {BUCKETS.map((b) => (
+              <Link
+                key={b.key}
+                href={`/metrics?m=${month}&v=${b.key}`}
+                className={`rounded-md px-2.5 py-1 text-[13px] font-semibold ${
+                  bucket === b.key
+                    ? 'bg-brand-600 text-white'
+                    : 'border border-ink-200 bg-white text-ink-600'
+                }`}
+              >
+                {b.label}
+              </Link>
+            ))}
+          </div>
+        }
+      >
+        <TrendChart
+          points={series}
+          lineKey={isMonthly ? '확정매출' : '광고비'}
+          lineLabel={isMonthly ? '확정매출' : '광고비'}
+        />
+
+        {series.length > 0 && (
+          <div className="-mx-5 mt-4 overflow-x-auto px-5">
+            <table className="w-full min-w-[560px] text-[14px]">
+              <thead>
+                <tr className="border-b border-ink-200 text-left text-[12px] text-ink-400">
+                  <th className="pb-2 font-semibold">{isMonthly ? '월' : '기간'}</th>
+                  <th className="pb-2 text-right font-semibold">신규 DB</th>
+                  <th className="pb-2 text-right font-semibold">광고비</th>
+                  <th className="pb-2 text-right font-semibold">DB 단가</th>
+                  {isMonthly && <th className="pb-2 text-right font-semibold">확정매출</th>}
+                  {isMonthly && <th className="pb-2 text-right font-semibold">ROAS</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ink-100 tnum">
+                {[...series].reverse().map((p) => (
+                  <tr key={p.key}>
+                    <td className="py-2.5 font-semibold text-ink-700">{p.label}</td>
+                    <td className="py-2.5 text-right">{p.신규DB || '·'}</td>
+                    <td className="py-2.5 text-right text-ink-600">
+                      {p.광고비 !== null ? formatNumber(p.광고비) : '—'}
+                    </td>
+                    <td className="py-2.5 text-right text-ink-500">
+                      {p.dbCost !== null ? formatNumber(p.dbCost) : '—'}
+                    </td>
+                    {isMonthly && (
+                      <td className="py-2.5 text-right font-semibold text-brand-700">
+                        {p.확정매출 !== null ? formatNumber(p.확정매출) : '—'}
+                      </td>
+                    )}
+                    {isMonthly && (
+                      <td className="py-2.5 text-right">
+                        {p.roas !== null ? `${p.roas.toFixed(1)}배` : '—'}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!isMonthly && (
+              <p className="mt-3 text-[12px] text-ink-400">
+                광고비는 아침에 기록된 누적액의 차이로 계산합니다. 수집이 연달아 없는 구간은 —로
+                둡니다. 확정매출은 달 단위로만 집계되어 월별 보기에서 확인하실 수 있습니다.
+              </p>
+            )}
+          </div>
+        )}
+      </Card>
 
       <div className="grid gap-5">
         {/* ---------------- 광고비 ---------------- */}

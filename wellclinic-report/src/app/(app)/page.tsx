@@ -132,7 +132,9 @@ export default async function DashboardPage() {
           label={`${formatMonth(month)} 광고비`}
           value={summary.광고비 ? formatCompactWon(summary.광고비) : '—'}
           unit={summary.광고비 ? '원' : undefined}
-          hint={summary.신규DB ? `신규 DB ${summary.신규DB}건` : '수집 자료 없음'}
+          hint={
+            summary.기록일 ? `${formatKorean(summary.기록일, false)} 수집 기준` : '수집 자료 없음'
+          }
         />
         <Stat
           label="이번 달 ROAS"
@@ -145,6 +147,17 @@ export default async function DashboardPage() {
           }
         />
       </div>
+
+      {summary.coverage.빠진날짜.length > 0 && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+          <p className="text-[13px] text-amber-800">
+            아침 수집이 {summary.coverage.빠진날짜.length}일치 밀려 있습니다. 한 번 돌리면 채워집니다.
+          </p>
+          <Link href="/metrics" className="btn-ghost shrink-0">
+            자세히
+          </Link>
+        </div>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Card

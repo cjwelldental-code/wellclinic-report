@@ -12,7 +12,7 @@ import {
   type Project,
   type RevenueRow,
 } from './schema';
-import { addDays, monthRange } from './date';
+import { addDays, dayOfWeek, monthRange, shiftMonth, todayKST } from './date';
 
 /**
  * 시트 읽기 래퍼. 시트가 아직 준비되지 않았거나 권한이 없으면
@@ -337,6 +337,50 @@ export function latestBalances(rows: BalanceRow[]): BalanceRow[] {
 // 월 단위 종합
 // ---------------------------------------------------------------------------
 
+/**
+ * 신규 DB가 그달의 며칠치를 담고 있는지.
+ * 수집이 하루라도 빠지면 신규 DB 합계가 실제보다 적게 나오는데,
+ * 화면에서 그걸 모르면 숫자를 그대로 믿게 되므로 빠진 날짜를 그대로 드러낸다.
+ */
+export interface LeadCoverage {
+  기대일수: number;
+  수집일수: number;
+  빠진날짜: string[];
+  시작: string | null;
+  끝: string | null;
+  완전한가: boolean;
+}
+
+/** 이 시스템이 자료를 모으기 시작한 날. 이전 기간은 비어 있는 게 정상이다. */
+export const DATA_START = '2026-08-01';
+
+export function leadCoverage(
+  leads: LeadRow[],
+  month: string,
+  today = todayKST(),
+): LeadCoverage {
+  const { start, end } = monthRange(month);
+  // 오늘치는 아직 마감 전이라 기대하지 않는다
+  const 마지막기대일 = [addDays(today, -1), end].sort()[0];
+  const 첫기대일 = start < DATA_START ? DATA_START : start;
+
+  const 기대: string[] = [];
+  for (let d = 첫기대일; d <= 마지막기대일; d = addDays(d, 1)) 기대.push(d);
+
+  const 있는날 = new Set(leadsInMonth(leads, month).map((r) => r.날짜));
+  const 빠진날짜 = 기대.filter((d) => !있는날.has(d));
+  const 정렬 = [...있는날].sort();
+
+  return {
+    기대일수: 기대.length,
+    수집일수: 있는날.size,
+    빠진날짜,
+    시작: 정렬[0] ?? null,
+    끝: 정렬.at(-1) ?? null,
+    완전한가: 기대.length > 0 && 빠진날짜.length === 0,
+  };
+}
+
 export interface MonthSummary {
   month: string;
   광고비: number;
@@ -344,9 +388,10 @@ export interface MonthSummary {
   확정매출: number;
   수납금액: number;
   신규DB: number;
-  roas: number;      // 배수
-  dbCost: number;    // DB 1건당 광고비
+  roas: number;              // 배수
+  dbCost: number | null;     // DB 1건당 광고비. 수집이 빠진 날이 있으면 null
   기록일: string | null;
+  coverage: LeadCoverage;
 }
 
 export function monthSummary(
@@ -358,6 +403,7 @@ export function monthSummary(
   const s = spendSnapshot(spend, month);
   const r = revenueSnapshot(revenue, month);
   const l = sumLeads(leadsInMonth(leads, month));
+  const coverage = leadCoverage(leads, month);
 
   return {
     month,
@@ -367,9 +413,145 @@ export function monthSummary(
     수납금액: r.합계.수납금액,
     신규DB: l.total,
     roas: s.지출 > 0 ? r.합계.확정매출 / s.지출 : 0,
-    dbCost: l.total > 0 ? s.지출 / l.total : 0,
+    // 광고비는 한 달 누적인데 신규 DB에 빠진 날이 있으면 분모가 작아져
+    // DB 단가가 실제보다 비싸게 나온다. 그럴 때는 아예 계산하지 않는다.
+    dbCost: coverage.완전한가 && l.total > 0 ? s.지출 / l.total : null,
     기록일: s.기록일 ?? r.기록일,
+    coverage,
   };
+}
+
+// ---------------------------------------------------------------------------
+// 기간 단위 시계열 (일별 / 주별 / 월별)
+// ---------------------------------------------------------------------------
+
+export type Bucket = 'day' | 'week' | 'month';
+
+export interface SeriesPoint {
+  key: string;                 // 정렬·식별용
+  label: string;               // 화면에 보이는 이름
+  신규DB: number;
+  광고비: number | null;       // 알 수 없으면 null (스냅샷이 연달아 없는 구간)
+  확정매출: number | null;     // 월 단위에서만 값이 있다
+  roas: number | null;
+  dbCost: number | null;
+}
+
+const 요일 = ['일', '월', '화', '수', '목', '금', '토'];
+
+/** 그 날이 속한 주의 월요일 */
+function weekStart(date: string): string {
+  const dow = new Date(Date.UTC(
+    Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)),
+  )).getUTCDay();
+  return addDays(date, dow === 0 ? -6 : 1 - dow);
+}
+
+const shortDate = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+
+/** 선택한 달의 날짜별 시계열 */
+export function dailySeries(
+  spend: AdSpendRow[],
+  leads: LeadRow[],
+  month: string,
+  today = todayKST(),
+): SeriesPoint[] {
+  const { start, end } = monthRange(month);
+  const 마지막 = [addDays(today, -1), end].sort()[0];
+  const 시작 = start < DATA_START ? DATA_START : start;
+  if (시작 > 마지막) return [];
+
+  const byDate = new Map(leadsInMonth(leads, month).map((r) => [r.날짜, leadTotal(r)]));
+  const daily = dailySpend(spend, month);
+
+  const out: SeriesPoint[] = [];
+  for (let d = 시작; d <= 마지막; d = addDays(d, 1)) {
+    const 신규DB = byDate.get(d) ?? 0;
+    const 광고비 = daily.has(d) ? daily.get(d)! : null;
+    out.push({
+      key: d,
+      label: `${shortDate(d)}(${요일[dayOfWeek(d)]})`,
+      신규DB,
+      광고비,
+      확정매출: null,
+      roas: null,
+      dbCost: 광고비 !== null && 신규DB > 0 ? 광고비 / 신규DB : null,
+    });
+  }
+  return out;
+}
+
+/** 선택한 달을 주 단위로 묶은 시계열 (월요일 시작) */
+export function weeklySeries(
+  spend: AdSpendRow[],
+  leads: LeadRow[],
+  month: string,
+  today = todayKST(),
+): SeriesPoint[] {
+  const days = dailySeries(spend, leads, month, today);
+  const buckets = new Map<string, SeriesPoint[]>();
+
+  for (const d of days) {
+    const k = weekStart(d.key);
+    buckets.set(k, [...(buckets.get(k) ?? []), d]);
+  }
+
+  return [...buckets.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, list]) => {
+      const 신규DB = list.reduce((s, d) => s + d.신규DB, 0);
+      const 알려진 = list.filter((d) => d.광고비 !== null);
+      const 광고비 = 알려진.length ? 알려진.reduce((s, d) => s + d.광고비!, 0) : null;
+      return {
+        key: k,
+        label: `${shortDate(list[0].key)}~${shortDate(list.at(-1)!.key)}`,
+        신규DB,
+        광고비,
+        확정매출: null,
+        roas: null,
+        dbCost: 광고비 !== null && 신규DB > 0 ? 광고비 / 신규DB : null,
+      };
+    });
+}
+
+/** 최근 몇 달을 월 단위로 묶은 시계열 */
+export function monthlySeries(
+  spend: AdSpendRow[],
+  revenue: RevenueRow[],
+  leads: LeadRow[],
+  endMonth: string,
+  count = 6,
+): SeriesPoint[] {
+  const months: string[] = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const m = shiftMonth(endMonth, -i);
+    if (m >= DATA_START.slice(0, 7)) months.push(m);
+  }
+
+  return months.map((m) => {
+    const s = monthSummary(spend, revenue, leads, m);
+    return {
+      key: m,
+      label: `${Number(m.slice(5, 7))}월`,
+      신규DB: s.신규DB,
+      광고비: s.광고비 || null,
+      확정매출: s.확정매출 || null,
+      roas: s.roas || null,
+      dbCost: s.dbCost,
+    };
+  });
+}
+
+export function buildSeries(
+  bucket: Bucket,
+  spend: AdSpendRow[],
+  revenue: RevenueRow[],
+  leads: LeadRow[],
+  month: string,
+): SeriesPoint[] {
+  if (bucket === 'month') return monthlySeries(spend, revenue, leads, month);
+  if (bucket === 'week') return weeklySeries(spend, leads, month);
+  return dailySeries(spend, leads, month);
 }
 
 /** 최근 N일 추세 — 신규 DB, 하루 광고비, DB 단가 */
