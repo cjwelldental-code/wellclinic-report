@@ -22,6 +22,53 @@ export function currentMonthKST(): string {
   return todayKST().slice(0, 7);
 }
 
+// ---------------------------------------------------------------------------
+// 시각 ('HH:MM' 문자열)
+// ---------------------------------------------------------------------------
+
+/** 하루의 마지막 칸. 올림·덧셈이 자정을 넘어가면 여기서 멈춘다. */
+const LAST_SLOT = 23 * 60 + 45;
+
+const toMinutes = (time: string): number => {
+  const [h, m] = time.split(':').map(Number);
+  return h * 60 + m;
+};
+
+const toTime = (minutes: number): string => {
+  const clamped = Math.max(0, Math.min(LAST_SLOT, minutes));
+  return `${String(Math.floor(clamped / 60)).padStart(2, '0')}:${String(clamped % 60).padStart(2, '0')}`;
+};
+
+/** 서울 기준 지금 시각 'HH:MM' */
+export function nowTimeKST(): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: TZ,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date());
+}
+
+/**
+ * 지금 시각을 step 분 단위의 다음 칸으로 올린다.
+ * 4시 26분이면 4시 30분. 이미 딱 맞으면 그대로 둔다.
+ * 일정은 앞으로 잡는 것이라 내림하지 않는다.
+ */
+export function ceilToStep(time: string, step: number): string {
+  return toTime(Math.ceil(toMinutes(time) / step) * step);
+}
+
+/** 'HH:MM' 에 분을 더한다. 자정을 넘으면 하루의 마지막 칸에서 멈춘다. */
+export function addMinutes(time: string, minutes: number): string {
+  return toTime(toMinutes(time) + minutes);
+}
+
+/** 15분 단위인지. 빈 값은 통과시킨다(종일 일정). */
+export function isQuarterHour(time: string): boolean {
+  if (!time) return true;
+  return /^([01]\d|2[0-3]):(00|15|30|45)$/.test(time);
+}
+
 function parse(dateStr: string): Date {
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d));

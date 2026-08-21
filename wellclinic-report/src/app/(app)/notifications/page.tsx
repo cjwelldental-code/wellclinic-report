@@ -4,6 +4,7 @@ import { lastReadAt, notificationsFor } from '@/lib/comments';
 import { getComments, getDailyReports, getProjects, getReads } from '@/lib/data';
 import { markNotificationsRead } from '@/app/actions';
 import { ActionForm } from '@/components/ActionForm';
+import { Multiline } from '@/components/Field';
 import { Badge, Card, ConnectionError, Empty, PageHeader } from '@/components/ui';
 import { TARGET_LABEL, type CommentTarget } from '@/lib/schema';
 
@@ -141,7 +142,7 @@ function NotificationCard({
         <span className="ml-auto text-[12px] text-ink-400 tnum">{시각(n.생성일시)}</span>
       </div>
 
-      <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-ink-800">{n.내용}</p>
+      <Multiline text={n.내용} className="text-[15px] leading-relaxed text-ink-800" />
 
       <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-ink-100 pt-2.5">
         <p className="text-[13px] text-ink-500">

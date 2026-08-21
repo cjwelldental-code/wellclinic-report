@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { addComment, deleteComment, type ActionResult } from '@/app/actions';
+import { Multiline } from './Field';
 import type { CommentRow, CommentTarget } from '@/lib/schema';
 
 /**
@@ -112,13 +113,12 @@ export function Comments({
                     </span>
                   )}
                 </div>
-                <p
-                  className={`mt-0.5 whitespace-pre-wrap text-[14px] leading-relaxed ${
+                <Multiline
+                  text={c.내용}
+                  className={`mt-0.5 text-[14px] leading-relaxed ${
                     원장 ? 'text-brand-900' : 'text-ink-700'
                   }`}
-                >
-                  {c.내용}
-                </p>
+                />
               </li>
             );
           })}

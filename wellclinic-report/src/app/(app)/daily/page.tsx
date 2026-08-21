@@ -10,6 +10,7 @@ import {
 } from '@/lib/data';
 import { addDays, formatKorean, todayKST } from '@/lib/date';
 import { commentsFor } from '@/lib/comments';
+import { aiConfigured } from '@/lib/ai';
 import { Badge, Card, ConnectionError, Empty, PageHeader } from '@/components/ui';
 import { ActionForm, DeleteButton, Disclosure } from '@/components/ActionForm';
 import { Area, Multiline, Row, Select, Text } from '@/components/Field';
@@ -47,6 +48,7 @@ export default async function DailyPage({
   const projectNames = activeProjects(projectRes.rows).map((p) => p.이름);
   const allProjectNames = [...new Set([...projectNames, ...projectRes.rows.map((p) => p.이름)])];
   const memberNames = configuredMembers().map((m) => m.name);
+  const ai = aiConfigured();
 
   // 어제 보고에 적어 둔 내일 계획. 오늘 보고를 쓸 때 그대로 불러올 수 있게 넘긴다.
   const 어제계획 =
@@ -128,7 +130,14 @@ export default async function DailyPage({
                 defaultValue={editing.소요시간}
               />
             </Row>
-            <SmartArea name="한일" label="오늘 한 일" rows={7} defaultValue={editing.한일} required />
+            <SmartArea
+              name="한일"
+              label="오늘 한 일"
+              rows={7}
+              defaultValue={editing.한일}
+              required
+              aiReady={ai}
+            />
             <Area name="내일계획" label="내일 계획" rows={3} defaultValue={editing.내일계획} />
             <Area name="이슈" label="이슈 · 공유 사항" rows={2} defaultValue={editing.이슈} />
           </ActionForm>
@@ -170,6 +179,7 @@ export default async function DailyPage({
               rows={8}
               required
               carryOver={어제계획}
+              aiReady={ai}
               hint="한 줄에 하나씩 적으면 월간보고에서 그대로 모입니다."
             />
             <Area

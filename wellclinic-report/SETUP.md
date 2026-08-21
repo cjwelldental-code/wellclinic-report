@@ -101,6 +101,7 @@ git push -u origin main
 | `TEAM_PASSWORD` | 다 같이 쓸 공용 비밀번호 |
 | `SESSION_SECRET` | 아무 임의 문자열 32자 이상 |
 | `INGEST_TOKEN` | 매일 아침 자동 수집용 토큰. 아무 임의 문자열 |
+| `GEMINI_API_KEY` | (선택) 보고 글 AI 정리용 키. 아래 7단계 참고 |
 
 `SESSION_SECRET` 은 아래 명령으로 만들 수 있습니다.
 
@@ -124,6 +125,30 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 > 이미 쓰고 있는 시스템에 기능을 새로 올렸을 때도 이 버튼을 한 번 눌러 주세요. 없는 탭만
 > 새로 만들고 기존 탭과 데이터는 건드리지 않습니다.
+
+---
+
+## 7단계. AI 정리 켜기 (선택)
+
+보고 글을 번호 매긴 형식으로 다듬어 주는 기능입니다. 안 켜도 나머지는 그대로 돌아갑니다.
+
+1. [aistudio.google.com/apikey](https://aistudio.google.com/apikey) 에서 `API 키 만들기`
+2. Vercel → 프로젝트 → `Settings` → `Environment Variables` 에 `GEMINI_API_KEY` 로 추가
+3. `Deployments` 에서 `Redeploy`
+
+일일보고와 월간보고 화면에 `✨ AI로 정리` 버튼이 생깁니다.
+
+> **키는 비밀번호와 같습니다.** 저장소나 메신저에 붙여넣지 마세요. 어딘가에 노출됐다면
+> AI Studio 에서 새 키를 만들고 옛 키를 삭제하세요.
+
+### 알아 둘 것
+
+- 무료 한도가 **하루 20회**입니다. 다 쓰면 "사용량을 다 썼습니다" 가 뜨고, 다음 날 풀립니다.
+  더 필요하면 AI Studio 에서 결제를 켜세요
+- 모델은 `gemini-3.5-flash` 를 씁니다. AI콜 모니터링 시스템이 쓰는 모델과 한도를 나눠 쓰지
+  않으려고 고른 것입니다. 바꾸려면 `GEMINI_MODEL` 환경변수에 모델 이름을 넣으세요
+- AI가 정리한 글은 **저장 전에 숫자와 이름을 꼭 확인**하세요. `되돌리기` 버튼으로 원래 글로
+  돌아갈 수 있습니다
 
 ---
 

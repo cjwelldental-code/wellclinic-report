@@ -17,6 +17,7 @@ const ENV_VARS = [
   { key: 'TEAM_PASSWORD', desc: '공용 로그인 비밀번호' },
   { key: 'SESSION_SECRET', desc: '세션 서명용 임의 문자열 (16자 이상)' },
   { key: 'INGEST_TOKEN', desc: '매일 아침 자동 수집이 데이터를 보낼 때 쓰는 토큰' },
+  { key: 'GEMINI_API_KEY', desc: '보고 글 AI 정리에 쓰는 구글 AI Studio 키 (없으면 정리 버튼이 숨겨짐)' },
 ];
 
 export default async function SetupPage() {

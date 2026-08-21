@@ -15,7 +15,27 @@ export interface CalendarEvent {
   link: string;
   calendar: string;   // 표시용 캘린더 이름
   holiday: boolean;   // 공휴일이면 true
+  color: string;      // 구글 colorId. 지정 안 했으면 ''
 }
+
+/**
+ * 구글 캘린더가 쓰는 11가지 일정 색.
+ * colorId 를 그대로 넣으므로 여기서 고른 색이 팀원 각자의 구글 캘린더에도 같게 보인다.
+ * 화면에 그릴 때 쓰려고 hex 를 함께 둔다 (구글 API 는 색 이름을 따로 주지 않는다).
+ */
+export const GOOGLE_EVENT_COLORS: Record<string, string> = {
+  '1': '#7986cb',  // 라벤더
+  '2': '#33b679',  // 세이지
+  '3': '#8e24aa',  // 포도
+  '4': '#e67c73',  // 플라밍고
+  '5': '#f6bf26',  // 바나나
+  '6': '#f4511e',  // 귤
+  '7': '#039be5',  // 공작
+  '8': '#616161',  // 그래파이트
+  '9': '#3f51b5',  // 블루베리
+  '10': '#0b8043', // 바질
+  '11': '#d50000', // 토마토
+};
 
 interface CalendarSource {
   id: string;
@@ -65,6 +85,7 @@ export async function createEvent(input: {
   참석자?: string;
   메모?: string;
   작성자?: string;
+  색깔?: string;
 }): Promise<{ id: string; link: string }> {
   const calendar = google.calendar({ version: 'v3', auth: getAuth() });
 
@@ -91,6 +112,8 @@ export async function createEvent(input: {
       summary: input.제목,
       location: input.장소 || undefined,
       description: description || undefined,
+      // 비워 두면 캘린더 기본 색을 그대로 쓴다
+      colorId: input.색깔 && GOOGLE_EVENT_COLORS[input.색깔] ? input.색깔 : undefined,
       start: 시각있음
         ? { dateTime: `${input.날짜}T${input.시작시각}:00`, timeZone: 'Asia/Seoul' }
         : { date: input.날짜 },
@@ -191,6 +214,7 @@ export async function listEvents(
             link: item.htmlLink ?? '',
             calendar: source.label,
             holiday: source.id === HOLIDAY_CALENDAR.id,
+            color: item.colorId ?? '',
           });
         }
       } catch (e) {

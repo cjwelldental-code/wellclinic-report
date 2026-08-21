@@ -4,8 +4,9 @@ import { revalidatePath } from 'next/cache';
 import { configuredMembers, requireSession } from '@/lib/auth';
 import { appendRow, deleteRow, readTable, updateRow } from '@/lib/sheets';
 import { calendarSources, createEvent } from '@/lib/calendar';
+import { DRAFT_MONTHLY, TIDY_DAILY, ask, type AiResult } from '@/lib/ai';
 import { findMember } from '@/lib/members';
-import { isValidDate, todayKST } from '@/lib/date';
+import { isQuarterHour, isValidDate, todayKST } from '@/lib/date';
 import {
   COMMENT_TARGETS,
   type CommentRow,
@@ -23,11 +24,6 @@ function str(form: FormData, key: string): string {
   return String(form.get(key) ?? '').trim();
 }
 
-/** 비어 있거나 정각·30분이면 통과. 일정 시각은 30분 단위로만 받는다. */
-function isHalfHour(time: string): boolean {
-  if (!time) return true;
-  return /^([01]\d|2[0-3]):(00|30)$/.test(time);
-}
 
 async function run(fn: () => Promise<string>, paths: string[]): Promise<ActionResult> {
   try {
@@ -181,9 +177,9 @@ export async function addCalendarEvent(
     const 시작시각 = str(form, '시작시각');
     const 종료시각 = str(form, '종료시각');
     if (종료시각 && !시작시각) throw new Error('시작 시각을 함께 입력해 주세요.');
-    // 입력칸의 step 만 믿지 않는다. 브라우저에 따라 30분에서 어긋난 값이 넘어올 수 있다.
-    if (!isHalfHour(시작시각) || !isHalfHour(종료시각)) {
-      throw new Error('시각은 30분 단위로 입력해 주세요. (예: 14:00, 14:30)');
+    // 목록에 없는 값이 직접 넘어올 수 있으니 서버에서 한 번 더 본다
+    if (!isQuarterHour(시작시각) || !isQuarterHour(종료시각)) {
+      throw new Error('시각은 15분 단위로 골라 주세요. (예: 14:00, 14:15)');
     }
     if (시작시각 && 종료시각 && (!종료일 || 종료일 === 날짜) && 종료시각 <= 시작시각) {
       throw new Error('종료 시각이 시작 시각보다 빠릅니다.');
@@ -208,6 +204,7 @@ export async function addCalendarEvent(
         참석자: str(form, '참석자'),
         메모: str(form, '메모'),
         작성자: session.name,
+        색깔: str(form, '색깔'),
       });
     } catch (e) {
       const raw = (e as Error).message;
@@ -309,6 +306,23 @@ export async function markNotificationsRead(
 
     return '모두 확인 처리했습니다.';
   }, ['/', '/notifications']);
+}
+
+// ---------------------------------------------------------------------------
+// AI 정리
+//
+// 폼 제출이 아니라 화면에서 곧바로 부른다. 다듬은 글을 입력칸에 되돌려 놓아야 해서
+// ActionResult 대신 글까지 함께 돌려준다. 저장은 사람이 확인하고 누른다.
+// ---------------------------------------------------------------------------
+
+export async function tidyDailyReport(text: string): Promise<AiResult> {
+  await requireSession();
+  return ask(TIDY_DAILY, text);
+}
+
+export async function draftMonthlySummary(text: string): Promise<AiResult> {
+  await requireSession();
+  return ask(DRAFT_MONTHLY, text);
 }
 
 // ---------------------------------------------------------------------------

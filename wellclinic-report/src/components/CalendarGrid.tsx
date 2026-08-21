@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Comments } from './Comments';
+import { Multiline } from './Field';
 import type { CommentRow } from '@/lib/schema';
 
 /**
@@ -26,6 +27,8 @@ export interface GridItem {
   location?: string;
   description?: string;
   link?: string;
+  /** 일정에 지정된 색 (hex). 없으면 '' */
+  color?: string;
   /** 여러 날 일정이면 실제 시작·종료일 */
   start: string;
   end: string;
@@ -48,16 +51,22 @@ function 기간표시(item: GridItem): string {
   const 날짜 = 여러날 ? `${시작} ~ ${날짜표시(item.end)}` : 시작;
 
   if (item.allDay || !item.time) return `${날짜} · 종일`;
+  if (!item.endTime) return `${날짜} · ${시각표시(item.time)}`;
 
-  const 시각 = item.endTime ? `${시각표시(item.time)} ~ ${item.endTime}` : 시각표시(item.time);
-  return `${날짜} · ${시각}`;
+  // 오전·오후가 같으면 끝 시각에는 다시 붙이지 않는다 ('오후 2:00 ~ 2:30')
+  const 같은나절 = 오전인가(item.time) === 오전인가(item.endTime);
+  const 끝 = 같은나절 ? 시각표시(item.endTime, false) : 시각표시(item.endTime);
+
+  return `${날짜} · ${시각표시(item.time)} ~ ${끝}`;
 }
 
-function 시각표시(hhmm: string): string {
+const 오전인가 = (hhmm: string) => Number(hhmm.split(':')[0]) < 12;
+
+function 시각표시(hhmm: string, 나절표시 = true): string {
   const [h, m] = hhmm.split(':').map(Number);
-  const 오후 = h >= 12;
   const 열두시간 = h % 12 === 0 ? 12 : h % 12;
-  return `${오후 ? '오후' : '오전'} ${열두시간}:${String(m).padStart(2, '0')}`;
+  const 시분 = `${열두시간}:${String(m).padStart(2, '0')}`;
+  return 나절표시 ? `${h >= 12 ? '오후' : '오전'} ${시분}` : 시분;
 }
 
 const TONE: Record<GridItem['kind'], string> = {
@@ -96,6 +105,9 @@ function DetailPopup({
           ? 'bg-brand-500'
           : 'bg-sky-400';
 
+  // 일정에 색을 지정했으면 그 색을 쓴다
+  const 점스타일 = item.color ? { backgroundColor: item.color } : undefined;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/25 p-4"
@@ -111,7 +123,10 @@ function DetailPopup({
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-2.5">
-            <span className={`mt-2 h-2.5 w-2.5 shrink-0 rounded-sm ${점색}`} />
+            <span
+              className={`mt-2 h-2.5 w-2.5 shrink-0 rounded-sm ${item.color ? '' : 점색}`}
+              style={점스타일}
+            />
             <div className="min-w-0">
               <h3 className="text-[18px] leading-snug text-ink-900">{item.label}</h3>
               <p className="mt-1 text-[13px] text-ink-500 tnum">{기간표시(item)}</p>
@@ -137,7 +152,9 @@ function DetailPopup({
           {item.description && (
             <div className="flex gap-2.5">
               <dt className="w-12 shrink-0 text-[13px] text-ink-400">내용</dt>
-              <dd className="min-w-0 whitespace-pre-wrap text-ink-700">{item.description}</dd>
+              <dd className="min-w-0">
+                <Multiline text={item.description} className="text-ink-700" />
+              </dd>
             </div>
           )}
           {item.calendar && (
@@ -263,14 +280,18 @@ export function CalendarGrid({
                         <button
                           type="button"
                           onClick={() => setPicked(item)}
-                          className={`block w-full truncate rounded px-1 py-0.5 text-left text-[11px] leading-snug transition hover:brightness-95 ${TONE[item.kind]}`}
+                          className={`flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-[11px] leading-snug transition hover:brightness-95 ${TONE[item.kind]}`}
                           title={item.label}
                         >
-                          {item.time && (
-                            <span className="mr-1 tnum opacity-70">{item.time}</span>
+                          {item.color && (
+                            <span
+                              className="h-1.5 w-1.5 shrink-0 rounded-full"
+                              style={{ backgroundColor: item.color }}
+                            />
                           )}
-                          {item.label}
-                          {n > 0 && <span className="ml-1 font-semibold opacity-80">💬{n}</span>}
+                          {item.time && <span className="shrink-0 tnum opacity-70">{item.time}</span>}
+                          <span className="min-w-0 truncate">{item.label}</span>
+                          {n > 0 && <span className="shrink-0 font-semibold opacity-80">💬{n}</span>}
                         </button>
                       </li>
                     );

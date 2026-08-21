@@ -1,16 +1,19 @@
 import Link from 'next/link';
 import { requireSession } from '@/lib/auth';
-import { calendarSources, listEvents } from '@/lib/calendar';
+import { GOOGLE_EVENT_COLORS, calendarSources, listEvents } from '@/lib/calendar';
 import { activeProjects, getComments, getProjects } from '@/lib/data';
 import { addCalendarEvent } from '@/app/actions';
 import { ActionForm, Disclosure } from '@/components/ActionForm';
-import { Area, Row, Select, Text, TimeField } from '@/components/Field';
+import { Area, ColorPicker, Row, Select, Text, TimeSelect } from '@/components/Field';
 import { CalendarGrid, CalendarList, type GridItem } from '@/components/CalendarGrid';
 import {
+  addMinutes,
   calendarGrid,
+  ceilToStep,
   currentMonthKST,
   formatMonth,
   monthRange,
+  nowTimeKST,
   shiftMonth,
   todayKST,
 } from '@/lib/date';
@@ -29,6 +32,11 @@ export default async function CalendarPage({
   const month = /^\d{4}-\d{2}$/.test(m ?? '') ? (m as string) : currentMonthKST();
   const { start, end } = monthRange(month);
   const today = todayKST();
+
+  // 일정 추가 칸의 기본 시각. 구글처럼 지금 다음 15분 칸에서 시작해 한 시간짜리로 잡아 둔다.
+  // 목록을 펴면 브라우저가 이 값이 있는 자리로 스크롤해 준다.
+  const 기본시작 = ceilToStep(nowTimeKST(), 15);
+  const 기본종료 = addMinutes(기본시작, 60);
 
   const [calendarRes, projectRes, commentRes] = await Promise.all([
     listEvents(start, end),
@@ -70,6 +78,7 @@ export default async function CalendarPage({
         location: e.location,
         description: e.description,
         link: e.link,
+        color: GOOGLE_EVENT_COLORS[e.color] ?? '',
         start: e.start,
         end: e.end,
         allDay: e.allDay,
@@ -176,8 +185,13 @@ export default async function CalendarPage({
           <Row cols={4}>
             <Text name="날짜" label="날짜" type="date" defaultValue={today} required />
             <Text name="종료일" label="종료일" type="date" hint="하루짜리면 비워 두세요" />
-            <TimeField name="시작시각" label="시작" hint="30분 단위" />
-            <TimeField name="종료시각" label="종료" />
+            <TimeSelect
+              name="시작시각"
+              label="시작"
+              defaultValue={기본시작}
+              emptyLabel="— 종일 —"
+            />
+            <TimeSelect name="종료시각" label="종료" defaultValue={기본종료} />
           </Row>
 
           <Row cols={2}>
@@ -189,13 +203,16 @@ export default async function CalendarPage({
             />
           </Row>
 
+          <ColorPicker name="색깔" label="색깔" hint="구글 캘린더에서도 같은 색으로 보입니다." />
+
           <Area name="메모" label="메모" rows={2} placeholder="준비물, 이동 계획 등" />
         </ActionForm>
 
         <p className="mt-4 border-t border-ink-100 pt-3 text-[12px] leading-relaxed text-ink-400">
-          시각은 30분 단위로 고릅니다. 비워 두면 종일 일정으로 들어갑니다. 참석자는 캘린더 설명에
-          적히고 실제 초대장은 가지 않습니다. 등록한 일정은 팀원 각자의 구글 캘린더에도 그대로
-          보입니다.
+          시각은 15분 단위로 고릅니다. 지금 시각 다음 칸이 미리 잡혀 있고, 시작을
+          <span className="mx-0.5 font-semibold">종일</span>
+          로 바꾸면 종일 일정으로 들어갑니다. 참석자는 캘린더 설명에 적히고 실제 초대장은 가지
+          않습니다. 등록한 일정은 팀원 각자의 구글 캘린더에도 그대로 보입니다.
         </p>
       </Disclosure>
 

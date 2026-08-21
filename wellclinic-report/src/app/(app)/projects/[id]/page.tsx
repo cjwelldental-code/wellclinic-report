@@ -204,9 +204,9 @@ export default async function ProjectDetailPage({
                 </div>
                 <Multiline text={r.한일} className="mt-1 text-[14px] leading-relaxed text-ink-700" />
                 {r.이슈 && (
-                  <p className="mt-1.5 rounded-lg bg-amber-50 px-3 py-1.5 text-[13px] text-amber-800">
-                    {r.이슈}
-                  </p>
+                  <div className="mt-1.5 rounded-lg bg-amber-50 px-3 py-1.5">
+                    <Multiline text={r.이슈} className="text-[13px] text-amber-800" />
+                  </div>
                 )}
               </li>
             ))}

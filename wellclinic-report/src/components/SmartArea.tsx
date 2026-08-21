@@ -1,6 +1,7 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useTransition } from 'react';
+import { tidyDailyReport } from '@/app/actions';
 
 /**
  * 일일보고 본문 입력칸.
@@ -59,6 +60,8 @@ export function SmartArea({
   hint,
   /** 어제 적어 둔 내일 계획. 있으면 버튼 한 번으로 불러온다. */
   carryOver = '',
+  /** AI 정리 버튼을 보일지. 키가 없으면 감춘다. */
+  aiReady = false,
 }: {
   name: string;
   label: string;
@@ -67,6 +70,7 @@ export function SmartArea({
   required?: boolean;
   hint?: string;
   carryOver?: string;
+  aiReady?: boolean;
 }) {
   const id = `f-${name}`;
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -82,6 +86,31 @@ export function SmartArea({
       el.selectionStart = caret;
       el.selectionEnd = caret;
     });
+  };
+
+  // AI 정리. 사람이 쓴 글을 통째로 갈아 끼우는 것이라 직전 글을 들고 있다가 되돌릴 수 있게 한다.
+  const [정리중, startTidy] = useTransition();
+  const [알림, set알림] = useState<{ ok: boolean; message: string } | null>(null);
+  const [되돌릴글, set되돌릴글] = useState<string | null>(null);
+
+  const 정리하기 = () => {
+    const 원문 = value;
+    set알림(null);
+    startTidy(async () => {
+      const r = await tidyDailyReport(원문);
+      if (r.ok) {
+        set되돌릴글(원문);
+        적용(r.text.trim(), r.text.trim().length);
+      }
+      set알림({ ok: r.ok, message: r.message });
+    });
+  };
+
+  const 되돌리기 = () => {
+    if (되돌릴글 === null) return;
+    적용(되돌릴글, 되돌릴글.length);
+    set되돌릴글(null);
+    set알림(null);
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -168,16 +197,49 @@ export function SmartArea({
           {label}
           {required && <span className="ml-1 text-red-500">*</span>}
         </label>
-        {carryOver && (
-          <button
-            type="button"
-            onClick={불러오기}
-            className="text-[12px] font-semibold text-brand-600 hover:text-brand-800"
-          >
-            어제 적어 둔 내일 계획 불러오기
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {carryOver && (
+            <button
+              type="button"
+              onClick={불러오기}
+              className="text-[12px] font-semibold text-brand-600 hover:text-brand-800"
+            >
+              어제 적어 둔 내일 계획 불러오기
+            </button>
+          )}
+          {aiReady && (
+            <button
+              type="button"
+              onClick={정리하기}
+              disabled={정리중}
+              className="text-[12px] font-semibold text-brand-600 hover:text-brand-800 disabled:opacity-50"
+            >
+              {정리중 ? 'AI가 정리 중…' : '✨ AI로 정리'}
+            </button>
+          )}
+          {되돌릴글 !== null && !정리중 && (
+            <button
+              type="button"
+              onClick={되돌리기}
+              className="text-[12px] font-semibold text-ink-400 hover:text-ink-700"
+            >
+              되돌리기
+            </button>
+          )}
+        </div>
       </div>
+
+      {알림 && (
+        <p
+          className={`mb-1.5 text-[12px] font-semibold ${
+            알림.ok ? 'text-emerald-600' : 'text-red-600'
+          }`}
+          role="status"
+        >
+          {알림.message}
+          {알림.ok && ' 내용이 맞는지 확인하고 저장하세요.'}
+        </p>
+      )}
 
       <textarea
         ref={ref}

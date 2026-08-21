@@ -19,7 +19,9 @@ import { currentMonthKST, formatMonth, monthRange, shiftMonth } from '@/lib/date
 import { Badge, Card, ConnectionError, PageHeader, Stat, StatusBadge } from '@/components/ui';
 import { ActionForm } from '@/components/ActionForm';
 import { Area, Multiline } from '@/components/Field';
+import { AiDraftArea } from '@/components/AiDraftArea';
 import { PrintButton } from '@/components/PrintButton';
+import { aiConfigured } from '@/lib/ai';
 
 export const dynamic = 'force-dynamic';
 
@@ -267,11 +269,13 @@ export default async function MonthlyPage({
       <Card title={`${formatMonth(month)} 월간보고 작성`} className="no-print mt-5">
         <ActionForm action={saveMonthlyReport} submitLabel={saved ? '수정 저장' : '월간보고 저장'}>
           <input type="hidden" name="연월" value={month} />
-          <Area
+          <AiDraftArea
             name="성과요약"
             label="이달의 성과 요약"
             rows={6}
             defaultValue={saved?.성과요약 || draftSummary(byProject, completed)}
+            source={draftSummary(byProject, completed)}
+            aiReady={aiConfigured()}
             hint="비어 있으면 위 집계로 초안을 채워 두었습니다. 다듬어서 저장하세요."
           />
           <Area
