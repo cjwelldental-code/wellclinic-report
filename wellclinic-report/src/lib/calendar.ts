@@ -166,6 +166,13 @@ export async function listEvents(
         });
 
         for (const item of res.data.items ?? []) {
+          // 휴일 캘린더에는 법정 공휴일과 기념일이 섞여 온다.
+          // 구글이 설명란에 '공휴일' / '기념일' 로 구분해 주므로 공휴일만 남긴다.
+          // (국군의날·식목일처럼 쉬지 않는 날까지 뜨면 달력이 헷갈린다)
+          if (source.id === HOLIDAY_CALENDAR.id && !/^공휴일/.test(item.description ?? '')) {
+            continue;
+          }
+
           const allDay = Boolean(item.start?.date);
           const start = toDateOnly(item.start?.date ?? item.start?.dateTime);
           const rawEnd = toDateOnly(item.end?.date ?? item.end?.dateTime) || start;
