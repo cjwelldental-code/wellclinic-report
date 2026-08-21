@@ -22,7 +22,7 @@ interface DayItem {
   key: string;
   label: string;
   time: string;
-  kind: 'event' | 'deadline' | 'start';
+  kind: 'event' | 'deadline' | 'start' | 'holiday';
   href?: string;
   calendar?: string;
 }
@@ -56,7 +56,7 @@ export default async function CalendarPage({
         key: `${e.id}-${cursor}`,
         label: e.title,
         time: cursor === e.start ? e.time : '',
-        kind: 'event',
+        kind: e.holiday ? 'holiday' : 'event',
         calendar: e.calendar,
       });
       const [y, mo, d] = cursor.split('-').map(Number);
@@ -87,6 +87,12 @@ export default async function CalendarPage({
       });
     }
   }
+
+  const 휴일 = new Set(
+    [...byDay.entries()]
+      .filter(([, items]) => items.some((i) => i.kind === 'holiday'))
+      .map(([date]) => date),
+  );
 
   const grid = calendarGrid(month);
   const listView = [...byDay.entries()]
@@ -179,6 +185,9 @@ export default async function CalendarPage({
         <span className="inline-flex items-center gap-1.5 text-ink-500">
           <span className="h-2 w-2 rounded-full bg-brand-400" /> 프로젝트 시작
         </span>
+        <span className="inline-flex items-center gap-1.5 text-ink-500">
+          <span className="h-2 w-2 rounded-full bg-red-500" /> 공휴일
+        </span>
       </div>
 
       {/* 데스크톱: 달력 격자 */}
@@ -213,9 +222,11 @@ export default async function CalendarPage({
                     className={`inline-flex h-5 min-w-5 items-center justify-center rounded px-1 text-[12px] font-semibold tnum ${
                       isToday
                         ? 'bg-brand-600 text-white'
-                        : inMonth
-                          ? 'text-ink-600'
-                          : 'text-ink-300'
+                        : !inMonth
+                          ? 'text-ink-300'
+                          : 휴일.has(date) || i % 7 === 0
+                            ? 'text-red-500'
+                            : 'text-ink-600'
                     }`}
                   >
                     {Number(date.slice(8))}
@@ -225,11 +236,13 @@ export default async function CalendarPage({
                 <ul className="space-y-0.5">
                   {items.slice(0, 4).map((item) => {
                     const tone =
-                      item.kind === 'deadline'
-                        ? 'bg-red-50 text-red-700'
-                        : item.kind === 'start'
-                          ? 'bg-brand-50 text-brand-700'
-                          : 'bg-sky-50 text-sky-700';
+                      item.kind === 'holiday'
+                        ? 'bg-red-500 text-white'
+                        : item.kind === 'deadline'
+                          ? 'bg-red-50 text-red-700'
+                          : item.kind === 'start'
+                            ? 'bg-brand-50 text-brand-700'
+                            : 'bg-sky-50 text-sky-700';
                     const body = (
                       <span className="block truncate rounded px-1 py-0.5 text-[11px] leading-snug">
                         {item.time && <span className="mr-1 tnum opacity-70">{item.time}</span>}
@@ -272,10 +285,20 @@ export default async function CalendarPage({
                   <li key={item.key} className="flex items-center gap-2">
                     <Badge
                       tone={
-                        item.kind === 'deadline' ? 'red' : item.kind === 'start' ? 'brand' : 'blue'
+                        item.kind === 'holiday' || item.kind === 'deadline'
+                          ? 'red'
+                          : item.kind === 'start'
+                            ? 'brand'
+                            : 'blue'
                       }
                     >
-                      {item.kind === 'deadline' ? '마감' : item.kind === 'start' ? '시작' : (item.calendar ?? '일정')}
+                      {item.kind === 'holiday'
+                        ? '휴일'
+                        : item.kind === 'deadline'
+                          ? '마감'
+                          : item.kind === 'start'
+                            ? '시작'
+                            : (item.calendar ?? '일정')}
                     </Badge>
                     <span className="min-w-0 flex-1 truncate text-[14px] text-ink-800">
                       {item.href ? <Link href={item.href}>{item.label}</Link> : item.label}

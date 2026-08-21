@@ -12,12 +12,22 @@ export interface CalendarEvent {
   location: string;
   link: string;
   calendar: string;   // 표시용 캘린더 이름
+  holiday: boolean;   // 공휴일이면 true
 }
 
 interface CalendarSource {
   id: string;
   label: string;
 }
+
+/**
+ * 구글이 공개로 운영하는 대한민국 공휴일 캘린더.
+ * 공개 캘린더라 따로 공유받지 않아도 읽힌다. 환경변수로 뺄 이유가 없어 여기 고정한다.
+ */
+const HOLIDAY_CALENDAR = {
+  id: 'ko.south_korea#holiday@group.v.calendar.google.com',
+  label: '휴일',
+};
 
 /** GOOGLE_CALENDAR_IDS="웰치과=xxx@group.calendar.google.com,개인=yyy@gmail.com" */
 export function calendarSources(): CalendarSource[] {
@@ -131,10 +141,12 @@ export async function listEvents(
   timeMin: string,
   timeMax: string,
 ): Promise<{ events: CalendarEvent[]; error: string | null }> {
-  const sources = calendarSources();
-  if (sources.length === 0) {
+  const configured = calendarSources();
+  if (configured.length === 0) {
     return { events: [], error: 'GOOGLE_CALENDAR_IDS 가 설정되지 않았습니다.' };
   }
+  // 공휴일 캘린더를 함께 읽는다. 공개 캘린더라 실패해도 나머지에 영향이 없다.
+  const sources = [...configured, HOLIDAY_CALENDAR];
 
   const calendar = google.calendar({ version: 'v3', auth: getAuth() });
   const events: CalendarEvent[] = [];
@@ -167,6 +179,7 @@ export async function listEvents(
             location: item.location ?? '',
             link: item.htmlLink ?? '',
             calendar: source.label,
+            holiday: source.id === HOLIDAY_CALENDAR.id,
           });
         }
       } catch (e) {
@@ -175,7 +188,8 @@ export async function listEvents(
         const hint = raw.includes('Not Found')
           ? '캘린더 ID가 틀렸거나 서비스 계정에 공유되지 않았습니다. 캘린더 설정의 캘린더 통합 항목에서 캘린더 ID를 다시 확인해 주세요.'
           : raw;
-        errors.push(`${source.label}: ${hint}`);
+        // 공휴일은 부가 정보라, 못 읽어도 화면 상단에 오류를 띄우지 않는다
+        if (source.id !== HOLIDAY_CALENDAR.id) errors.push(`${source.label}: ${hint}`);
       }
     }),
   );

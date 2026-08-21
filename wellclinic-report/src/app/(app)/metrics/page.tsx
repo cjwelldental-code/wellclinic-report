@@ -392,7 +392,13 @@ export default async function MetricsPage({
                 ))}
               </div>
 
-              <div className="-mx-5 overflow-x-auto px-5">
+              <details className="group">
+                <summary className="mb-3 cursor-pointer list-none text-[13px] font-semibold text-brand-600">
+                  <span className="group-open:hidden">날짜별로 자세히 보기 ({leads.length}일)</span>
+                  <span className="hidden group-open:inline">접기</span>
+                </summary>
+
+                <div className="-mx-5 overflow-x-auto px-5">
                 <table className="w-full min-w-[560px] text-[14px]">
                   <thead>
                     <tr className="border-b border-ink-200 text-left text-[12px] text-ink-400">
@@ -452,7 +458,8 @@ export default async function MetricsPage({
                   하루 광고비는 아침에 기록된 누적액의 차이로 계산합니다. 그날 수집이 없으면 —로
                   표시됩니다.
                 </p>
-              </div>
+                </div>
+              </details>
             </>
           )}
         </Card>
