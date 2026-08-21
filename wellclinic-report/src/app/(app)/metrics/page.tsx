@@ -197,7 +197,15 @@ export default async function MetricsPage({
         />
 
         {series.length > 0 && (
-          <div className="-mx-5 mt-4 overflow-x-auto px-5">
+          <details className="group mt-4">
+            <summary className="mb-3 cursor-pointer list-none text-[13px] font-semibold text-brand-600">
+              <span className="group-open:hidden">
+                숫자로 자세히 보기 ({series.length}{isMonthly ? '개월' : bucket === 'week' ? '주' : '일'})
+              </span>
+              <span className="hidden group-open:inline">접기</span>
+            </summary>
+
+          <div className="-mx-5 overflow-x-auto px-5">
             <table className="w-full min-w-[560px] text-[14px]">
               <thead>
                 <tr className="border-b border-ink-200 text-left text-[12px] text-ink-400">
@@ -241,6 +249,7 @@ export default async function MetricsPage({
               </p>
             )}
           </div>
+          </details>
         )}
       </Card>
 
