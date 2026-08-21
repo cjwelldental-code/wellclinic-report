@@ -59,24 +59,13 @@ export function Text({
 }
 
 /**
- * 30분 단위 시각 선택.
+ * 30분 단위 시각 입력.
  *
- * type="time" 을 쓰면 브라우저 기본 시계가 1분 단위로 뜬다. 회의·면접·강의는 30분 단위로만
- * 잡히는데 분을 한 칸씩 굴려 맞추게 되고, 실수로 11:57 같은 값이 들어가기도 했다.
- * 목록으로 바꾸면 고를 수 있는 값 자체가 30분 단위가 된다.
+ * 목록으로 48칸을 늘어놓아 봤더니 자정부터 시작해서 오후 2시를 고르려면 한참 굴려야 했다.
+ * 그냥 작은 시각칸 하나가 낫다. step 을 1800초로 두면 화살표와 브라우저 시계가 30분씩 움직이고,
+ * 어긋난 값은 제출할 때 걸린다. 서버에서도 한 번 더 본다 (actions.ts 의 isHalfHour).
  */
-const HALF_HOURS: { value: string; label: string }[] = Array.from({ length: 48 }, (_, i) => {
-  const h = Math.floor(i / 2);
-  const m = i % 2 === 0 ? '00' : '30';
-  const 오후 = h >= 12;
-  const 열두시간 = h % 12 === 0 ? 12 : h % 12;
-  return {
-    value: `${String(h).padStart(2, '0')}:${m}`,
-    label: `${오후 ? '오후' : '오전'} ${열두시간}:${m}`,
-  };
-});
-
-export function TimeSelect({
+export function TimeField({
   name,
   label,
   defaultValue = '',
@@ -88,26 +77,19 @@ export function TimeSelect({
   hint?: string;
 }) {
   const id = `f-${name}`;
-  // 시트나 캘린더에서 30분 단위가 아닌 값이 들어와도 그 값을 잃지 않게 목록에 끼워 넣는다
-  const options = HALF_HOURS.some((o) => o.value === defaultValue) || !defaultValue
-    ? HALF_HOURS
-    : [...HALF_HOURS, { value: defaultValue, label: defaultValue }].sort((a, b) =>
-        a.value.localeCompare(b.value),
-      );
-
   return (
     <div>
       <label className="label" htmlFor={id}>
         {label}
       </label>
-      <select id={id} name={name} className="field tnum" defaultValue={defaultValue}>
-        <option value="">— 선택 —</option>
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+      <input
+        id={id}
+        name={name}
+        type="time"
+        step={1800}
+        className="field tnum"
+        defaultValue={defaultValue}
+      />
       {hint && <p className="mt-1 text-[12px] text-ink-400">{hint}</p>}
     </div>
   );

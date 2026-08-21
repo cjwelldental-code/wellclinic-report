@@ -4,7 +4,7 @@ import { calendarSources, listEvents } from '@/lib/calendar';
 import { activeProjects, getComments, getProjects } from '@/lib/data';
 import { addCalendarEvent } from '@/app/actions';
 import { ActionForm, Disclosure } from '@/components/ActionForm';
-import { Area, Row, Select, Text, TimeSelect } from '@/components/Field';
+import { Area, Row, Select, Text, TimeField } from '@/components/Field';
 import { CalendarGrid, CalendarList, type GridItem } from '@/components/CalendarGrid';
 import {
   calendarGrid,
@@ -176,8 +176,8 @@ export default async function CalendarPage({
           <Row cols={4}>
             <Text name="날짜" label="날짜" type="date" defaultValue={today} required />
             <Text name="종료일" label="종료일" type="date" hint="하루짜리면 비워 두세요" />
-            <TimeSelect name="시작시각" label="시작" />
-            <TimeSelect name="종료시각" label="종료" />
+            <TimeField name="시작시각" label="시작" hint="30분 단위" />
+            <TimeField name="종료시각" label="종료" />
           </Row>
 
           <Row cols={2}>

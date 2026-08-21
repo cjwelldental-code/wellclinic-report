@@ -23,6 +23,12 @@ function str(form: FormData, key: string): string {
   return String(form.get(key) ?? '').trim();
 }
 
+/** 비어 있거나 정각·30분이면 통과. 일정 시각은 30분 단위로만 받는다. */
+function isHalfHour(time: string): boolean {
+  if (!time) return true;
+  return /^([01]\d|2[0-3]):(00|30)$/.test(time);
+}
+
 async function run(fn: () => Promise<string>, paths: string[]): Promise<ActionResult> {
   try {
     const message = await fn();
@@ -175,6 +181,10 @@ export async function addCalendarEvent(
     const 시작시각 = str(form, '시작시각');
     const 종료시각 = str(form, '종료시각');
     if (종료시각 && !시작시각) throw new Error('시작 시각을 함께 입력해 주세요.');
+    // 입력칸의 step 만 믿지 않는다. 브라우저에 따라 30분에서 어긋난 값이 넘어올 수 있다.
+    if (!isHalfHour(시작시각) || !isHalfHour(종료시각)) {
+      throw new Error('시각은 30분 단위로 입력해 주세요. (예: 14:00, 14:30)');
+    }
     if (시작시각 && 종료시각 && (!종료일 || 종료일 === 날짜) && 종료시각 <= 시작시각) {
       throw new Error('종료 시각이 시작 시각보다 빠릅니다.');
     }

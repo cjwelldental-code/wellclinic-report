@@ -4,12 +4,15 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 
+/**
+ * 알림은 이 목록에 넣지 않는다. 매일 드나드는 화면이 아니라 "왔는지 아닌지"만 알면 되는 것이라,
+ * 메뉴 한 칸을 차지하는 대신 이름 옆 종 모양으로 뺐다. (아래 BellLink)
+ */
 const NAV = [
   { href: '/', label: '대시보드', icon: '▦' },
   { href: '/daily', label: '일일보고', icon: '✎' },
   { href: '/projects', label: '프로젝트', icon: '◈' },
   { href: '/calendar', label: '일정', icon: '▤' },
-  { href: '/notifications', label: '알림', icon: '◉' },
   { href: '/monthly', label: '월간보고', icon: '▣' },
   { href: '/metrics', label: '광고 성과', icon: '◔' },
 ];
@@ -18,13 +21,42 @@ function isActive(pathname: string, href: string) {
   return href === '/' ? pathname === '/' : pathname.startsWith(href);
 }
 
-/** 안 읽은 피드백 개수. 0이면 아무것도 그리지 않는다. */
-function UnreadDot({ count }: { count: number }) {
-  if (count <= 0) return null;
+/**
+ * 알림으로 가는 종 아이콘.
+ * 안 읽은 것이 있으면 종 위에 빨간 점을 찍는다. 개수까지 적으면 좁은 자리에서 시끄러워서
+ * "왔다" 만 점으로 알리고, 몇 건인지는 눌러서 들어간 화면에서 본다.
+ */
+function BellLink({ unread, onClick }: { unread: number; onClick?: () => void }) {
+  const 왔음 = unread > 0;
+
   return (
-    <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-semibold text-white tnum">
-      {count > 99 ? '99+' : count}
-    </span>
+    <Link
+      href="/notifications"
+      onClick={onClick}
+      aria-label={왔음 ? `알림 ${unread}건` : '알림'}
+      title={왔음 ? `확인하지 않은 피드백 ${unread}건` : '알림'}
+      className={`relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition ${
+        왔음 ? 'text-red-600 hover:bg-red-50' : 'text-ink-400 hover:bg-ink-50 hover:text-ink-700'
+      }`}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="h-[18px] w-[18px]"
+        aria-hidden="true"
+      >
+        <path d="M18 8A6 6 0 1 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+      </svg>
+
+      {왔음 && (
+        <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+      )}
+    </Link>
   );
 }
 
@@ -59,14 +91,18 @@ export function Sidebar({
           >
             <span className="w-4 text-center text-[13px] opacity-70">{item.icon}</span>
             {item.label}
-            {item.href === '/notifications' && <UnreadDot count={unread} />}
           </Link>
         ))}
       </nav>
 
       <div className="border-t border-ink-100 px-5 py-4">
-        <p className="text-[14px] font-semibold text-ink-800">{name}</p>
-        <p className="text-[12px] text-ink-400">{role}</p>
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate text-[14px] font-semibold text-ink-800">{name}</p>
+            <p className="text-[12px] text-ink-400">{role}</p>
+          </div>
+          <BellLink unread={unread} />
+        </div>
         <div className="mt-2 flex gap-3 text-[12px] text-ink-400">
           <Link href="/setup" className="hover:text-ink-700">
             설정
@@ -93,15 +129,8 @@ export function MobileNav({ name, unread = 0 }: { name: string; unread?: number 
           <p className="font-heading text-[14px] leading-tight text-ink-900">청주웰치과 마케팅팀</p>
           <p className="text-[12px] text-ink-400">{name}</p>
         </div>
-        <div className="flex items-center gap-2">
-          {unread > 0 && (
-            <Link
-              href="/notifications"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-red-500 px-2.5 py-1.5 text-[13px] font-semibold text-white"
-            >
-              새 피드백 <span className="tnum">{unread}</span>
-            </Link>
-          )}
+        <div className="flex items-center gap-1">
+          <BellLink unread={unread} />
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
@@ -128,7 +157,6 @@ export function MobileNav({ name, unread = 0 }: { name: string; unread?: number 
               }`}
             >
               {item.label}
-              {item.href === '/notifications' && <UnreadDot count={unread} />}
             </Link>
           ))}
           <Link
