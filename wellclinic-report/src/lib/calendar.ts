@@ -8,8 +8,10 @@ export interface CalendarEvent {
   start: string;      // YYYY-MM-DD
   end: string;        // YYYY-MM-DD (종료일 포함)
   time: string;       // 'HH:MM' 또는 '' (종일)
+  endTime: string;    // 'HH:MM' 또는 '' (종일)
   allDay: boolean;
   location: string;
+  description: string; // 참석자·메모. 상세 팝업에서 보여준다
   link: string;
   calendar: string;   // 표시용 캘린더 이름
   holiday: boolean;   // 공휴일이면 true
@@ -182,8 +184,10 @@ export async function listEvents(
             start,
             end: inclusiveEnd(rawEnd, allDay) || start,
             time: toTime(item.start?.dateTime),
+            endTime: toTime(item.end?.dateTime),
             allDay,
             location: item.location ?? '',
+            description: item.description ?? '',
             link: item.htmlLink ?? '',
             calendar: source.label,
             holiday: source.id === HOLIDAY_CALENDAR.id,

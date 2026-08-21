@@ -1,11 +1,20 @@
 import Link from 'next/link';
 import { requireSession, configuredMembers } from '@/lib/auth';
 import { deleteDailyReport, saveDailyReport } from '@/app/actions';
-import { activeProjects, getDailyReports, getProjects, reportsInRange } from '@/lib/data';
+import {
+  activeProjects,
+  getComments,
+  getDailyReports,
+  getProjects,
+  reportsInRange,
+} from '@/lib/data';
 import { addDays, formatKorean, todayKST } from '@/lib/date';
+import { commentsFor } from '@/lib/comments';
 import { Badge, Card, ConnectionError, Empty, PageHeader } from '@/components/ui';
 import { ActionForm, DeleteButton, Disclosure } from '@/components/ActionForm';
 import { Area, Multiline, Row, Select, Text } from '@/components/Field';
+import { SmartArea } from '@/components/SmartArea';
+import { Comments } from '@/components/Comments';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,11 +38,21 @@ export default async function DailyPage({
   const from = params.from || addDays(today, -30);
   const to = params.to || today;
 
-  const [dailyRes, projectRes] = await Promise.all([getDailyReports(), getProjects()]);
+  const [dailyRes, projectRes, commentRes] = await Promise.all([
+    getDailyReports(),
+    getProjects(),
+    getComments(),
+  ]);
 
   const projectNames = activeProjects(projectRes.rows).map((p) => p.이름);
   const allProjectNames = [...new Set([...projectNames, ...projectRes.rows.map((p) => p.이름)])];
   const memberNames = configuredMembers().map((m) => m.name);
+
+  // 어제 보고에 적어 둔 내일 계획. 오늘 보고를 쓸 때 그대로 불러올 수 있게 넘긴다.
+  const 어제계획 =
+    dailyRes.rows
+      .filter((r) => r.작성자 === session.name && r.날짜 < today && r.내일계획.trim())
+      .sort((a, b) => b.날짜.localeCompare(a.날짜))[0]?.내일계획 ?? '';
 
   let rows = reportsInRange(dailyRes.rows, from, to);
   if (params.작성자) rows = rows.filter((r) => r.작성자 === params.작성자);
@@ -109,7 +128,7 @@ export default async function DailyPage({
                 defaultValue={editing.소요시간}
               />
             </Row>
-            <Area name="한일" label="오늘 한 일" rows={5} defaultValue={editing.한일} required />
+            <SmartArea name="한일" label="오늘 한 일" rows={7} defaultValue={editing.한일} required />
             <Area name="내일계획" label="내일 계획" rows={3} defaultValue={editing.내일계획} />
             <Area name="이슈" label="이슈 · 공유 사항" rows={2} defaultValue={editing.이슈} />
           </ActionForm>
@@ -145,15 +164,21 @@ export default async function DailyPage({
                 placeholder="예: 3.5"
               />
             </Row>
-            <Area
+            <SmartArea
               name="한일"
               label="오늘 한 일"
-              rows={5}
+              rows={8}
               required
-              placeholder={'- 외국인 타깃 광고 소재 3종 시안 작업\n- 모두닥 CPV 캠페인 입찰가 조정'}
+              carryOver={어제계획}
               hint="한 줄에 하나씩 적으면 월간보고에서 그대로 모입니다."
             />
-            <Area name="내일계획" label="내일 계획" rows={3} placeholder="내일 우선으로 처리할 일" />
+            <Area
+              name="내일계획"
+              label="내일 계획"
+              rows={3}
+              placeholder="내일 우선으로 처리할 일"
+              hint="여기 적어 두면 다음 보고를 쓸 때 버튼 하나로 불러옵니다."
+            />
             <Area
               name="이슈"
               label="이슈 · 공유 사항"
@@ -290,14 +315,23 @@ export default async function DailyPage({
                       </div>
                     )}
 
-                    {(
-                      <div className="no-print mt-4 flex items-center gap-2 border-t border-ink-100 pt-3">
-                        <Link href={`/daily?edit=${r.id}`} className="btn-ghost px-3 py-1.5 text-[13px]">
-                          수정
-                        </Link>
-                        <DeleteButton action={deleteDailyReport} id={r.id} />
-                      </div>
-                    )}
+                    <div className="no-print">
+                      <Comments
+                        kind="daily"
+                        targetId={r.id}
+                        targetTitle={`${formatKorean(date)} ${r.작성자} 일일보고`}
+                        href="/daily"
+                        comments={commentsFor(commentRes.rows, 'daily', r.id)}
+                        currentUser={session.name}
+                      />
+                    </div>
+
+                    <div className="no-print mt-4 flex items-center gap-2 border-t border-ink-100 pt-3">
+                      <Link href={`/daily?edit=${r.id}`} className="btn-ghost px-3 py-1.5 text-[13px]">
+                        수정
+                      </Link>
+                      <DeleteButton action={deleteDailyReport} id={r.id} />
+                    </div>
                   </article>
                 ))}
               </div>

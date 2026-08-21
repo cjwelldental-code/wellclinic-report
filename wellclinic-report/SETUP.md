@@ -90,7 +90,7 @@ git push -u origin main
 
 1. [vercel.com/new](https://vercel.com/new) 에서 방금 만든 저장소를 선택
 2. 프레임워크는 Next.js 로 자동 인식됩니다. 그대로 둡니다
-3. `Environment Variables` 에 아래 8개를 넣습니다
+3. `Environment Variables` 에 아래 7개를 넣습니다
 
 | 이름 | 값 |
 |---|---|
@@ -98,8 +98,7 @@ git push -u origin main
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | JSON의 `client_email` |
 | `GOOGLE_PRIVATE_KEY` | JSON의 `private_key` 값 전체. 앞뒤 따옴표는 있어도 되고 없어도 됩니다 |
 | `GOOGLE_CALENDAR_IDS` | `웰치과=<캘린더ID>` 형식 |
-| `TEAM_MEMBERS` | `이하늘:팀장,홍길동:디자이너` 형식 |
-| `TEAM_PASSWORD` | 팀에서 쓸 공용 비밀번호 |
+| `TEAM_PASSWORD` | 다 같이 쓸 공용 비밀번호 |
 | `SESSION_SECRET` | 아무 임의 문자열 32자 이상 |
 | `INGEST_TOKEN` | 매일 아침 자동 수집용 토큰. 아무 임의 문자열 |
 
@@ -120,7 +119,11 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 3. 구글 시트 / 구글 캘린더 상태가 모두 `정상` 인지 확인
 4. `탭 만들기 · 확인` 버튼 클릭
 
-`프로젝트`, `일일보고`, `월간보고`, `신규DB`, `광고비`, `매출`, `청구잔액` 탭이 만들어집니다.
+`프로젝트`, `일일보고`, `월간보고`, `코멘트`, `알림확인`, `신규DB`, `광고비`, `매출`, `청구잔액`
+탭이 만들어집니다.
+
+> 이미 쓰고 있는 시스템에 기능을 새로 올렸을 때도 이 버튼을 한 번 눌러 주세요. 없는 탭만
+> 새로 만들고 기존 탭과 데이터는 건드리지 않습니다.
 
 ---
 
@@ -137,13 +140,25 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ---
 
-## 팀원 추가하기
+## 사람 추가하기
 
-1. Vercel → 프로젝트 → `Settings` → `Environment Variables`
-2. `TEAM_MEMBERS` 값 끝에 `,이름:역할` 을 덧붙임
-3. `Deployments` 에서 `Redeploy`
+명단은 `src/lib/members.ts` 에 있습니다. Vercel 을 만질 필요가 없습니다.
 
-비밀번호는 팀원 모두 같은 `TEAM_PASSWORD` 를 씁니다. 사람이 나가면 이 값을 바꾸고 재배포하면 됩니다.
+```ts
+export const ROSTER: readonly Member[] = [
+  { name: '빙정호', role: '원장', director: true },
+  ...
+  { name: '새사람', role: '사원', director: false },   // ← 이 줄을 넣는다
+];
+```
+
+- 적은 순서가 그대로 화면 순서입니다. 직급이 높은 사람부터 적습니다
+- `director: true` 는 원장님 계정입니다. 남긴 코멘트가 화면에서 눈에 띄게 표시됩니다
+- 저장하고 GitHub Desktop 으로 Commit → Push 하면 Vercel 이 알아서 다시 배포합니다
+
+비밀번호는 모두 같은 `TEAM_PASSWORD` 를 씁니다. 사람이 나가면 이 값을 바꾸고 재배포하면 됩니다.
+
+> 예전에 쓰던 `TEAM_MEMBERS` 환경변수는 더 이상 읽지 않습니다. Vercel 에 남아 있어도 무시됩니다.
 
 ---
 

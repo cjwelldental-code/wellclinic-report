@@ -8,6 +8,8 @@ export type TableKey =
   | 'projects'
   | 'daily'
   | 'monthly'
+  | 'comments'
+  | 'reads'
   | 'leads'
   | 'adspend'
   | 'revenue'
@@ -35,6 +37,28 @@ export const TABLES: Record<TableKey, { title: string; headers: string[] }> = {
       'id', '연월', '작성자', '성과요약', '주요지표', '다음달계획',
       '이슈및제안', '생성일시', '수정일시',
     ],
+  },
+
+  /**
+   * 일일보고 · 프로젝트 · 일정에 달리는 피드백과 코멘트.
+   * 대상제목과 링크를 같이 저장해 두면 알림 목록에서 원본을 다시 읽지 않아도 된다.
+   * (일정은 구글 캘린더에 있어서 지난 달로 넘어가면 다시 찾기 번거롭다)
+   */
+  comments: {
+    title: '코멘트',
+    headers: [
+      'id', '대상종류', '대상id', '대상제목', '링크', '작성자', '역할',
+      '내용', '생성일시', '수정일시',
+    ],
+  },
+
+  /**
+   * 사람마다 알림을 마지막으로 확인한 시각. 한 사람당 한 행이다.
+   * 코멘트마다 읽음 표시를 따로 두면 행이 사람 수만큼 곱해져 시트가 금방 커진다.
+   */
+  reads: {
+    title: '알림확인',
+    headers: ['id', '사용자', '확인일시', '생성일시', '수정일시'],
   },
 
   // --- 매일 아침 자동 수집 ---
@@ -132,6 +156,41 @@ export type MonthlyReport = {
   주요지표: string;
   다음달계획: string;
   이슈및제안: string;
+  생성일시: string;
+  수정일시: string;
+};
+
+// ---------------------------------------------------------------------------
+// 코멘트 · 알림
+// ---------------------------------------------------------------------------
+
+/** 코멘트를 달 수 있는 대상 */
+export const COMMENT_TARGETS = ['daily', 'project', 'event'] as const;
+export type CommentTarget = (typeof COMMENT_TARGETS)[number];
+
+export const TARGET_LABEL: Record<CommentTarget, string> = {
+  daily: '일일보고',
+  project: '프로젝트',
+  event: '일정',
+};
+
+export type CommentRow = {
+  id: string;
+  대상종류: string;
+  대상id: string;
+  대상제목: string;
+  링크: string;
+  작성자: string;
+  역할: string;
+  내용: string;
+  생성일시: string;
+  수정일시: string;
+};
+
+export type ReadRow = {
+  id: string;
+  사용자: string;
+  확인일시: string;
   생성일시: string;
   수정일시: string;
 };

@@ -1,6 +1,7 @@
 import 'server-only';
 import { cookies } from 'next/headers';
 import { SignJWT, jwtVerify } from 'jose';
+import { ROSTER, type Member } from './members';
 
 const COOKIE = 'wc_session';
 const MAX_AGE = 60 * 60 * 24 * 30; // 30일
@@ -18,17 +19,12 @@ function secret(): Uint8Array {
   return new TextEncoder().encode(s);
 }
 
-/** TEAM_MEMBERS="이하늘:팀장,홍길동:디자이너" 형식 */
-export function configuredMembers(): { name: string; role: string }[] {
-  const raw = process.env.TEAM_MEMBERS ?? '';
-  return raw
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .map((entry) => {
-      const [name, role] = entry.split(':').map((s) => s.trim());
-      return { name, role: role || '팀원' };
-    });
+/**
+ * 로그인·작성자 목록. src/lib/members.ts 의 명단을 그대로 쓴다.
+ * 예전에 쓰던 TEAM_MEMBERS 환경변수는 더 이상 보지 않는다. (members.ts 주석 참고)
+ */
+export function configuredMembers(): Member[] {
+  return [...ROSTER];
 }
 
 export async function createSession(name: string, role: string): Promise<void> {

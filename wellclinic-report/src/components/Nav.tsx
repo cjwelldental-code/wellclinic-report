@@ -9,6 +9,7 @@ const NAV = [
   { href: '/daily', label: '일일보고', icon: '✎' },
   { href: '/projects', label: '프로젝트', icon: '◈' },
   { href: '/calendar', label: '일정', icon: '▤' },
+  { href: '/notifications', label: '알림', icon: '◉' },
   { href: '/monthly', label: '월간보고', icon: '▣' },
   { href: '/metrics', label: '광고 성과', icon: '◔' },
 ];
@@ -17,7 +18,25 @@ function isActive(pathname: string, href: string) {
   return href === '/' ? pathname === '/' : pathname.startsWith(href);
 }
 
-export function Sidebar({ name, role }: { name: string; role: string }) {
+/** 안 읽은 피드백 개수. 0이면 아무것도 그리지 않는다. */
+function UnreadDot({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-semibold text-white tnum">
+      {count > 99 ? '99+' : count}
+    </span>
+  );
+}
+
+export function Sidebar({
+  name,
+  role,
+  unread = 0,
+}: {
+  name: string;
+  role: string;
+  unread?: number;
+}) {
   const pathname = usePathname();
 
   return (
@@ -40,6 +59,7 @@ export function Sidebar({ name, role }: { name: string; role: string }) {
           >
             <span className="w-4 text-center text-[13px] opacity-70">{item.icon}</span>
             {item.label}
+            {item.href === '/notifications' && <UnreadDot count={unread} />}
           </Link>
         ))}
       </nav>
@@ -62,7 +82,7 @@ export function Sidebar({ name, role }: { name: string; role: string }) {
   );
 }
 
-export function MobileNav({ name }: { name: string }) {
+export function MobileNav({ name, unread = 0 }: { name: string; unread?: number }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -73,15 +93,25 @@ export function MobileNav({ name }: { name: string }) {
           <p className="font-heading text-[14px] leading-tight text-ink-900">청주웰치과 마케팅팀</p>
           <p className="text-[12px] text-ink-400">{name}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="btn-ghost px-3 py-1.5"
-          aria-expanded={open}
-          aria-label="메뉴 열기"
-        >
-          {open ? '닫기' : '메뉴'}
-        </button>
+        <div className="flex items-center gap-2">
+          {unread > 0 && (
+            <Link
+              href="/notifications"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-red-500 px-2.5 py-1.5 text-[13px] font-semibold text-white"
+            >
+              새 피드백 <span className="tnum">{unread}</span>
+            </Link>
+          )}
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="btn-ghost px-3 py-1.5"
+            aria-expanded={open}
+            aria-label="메뉴 열기"
+          >
+            {open ? '닫기' : '메뉴'}
+          </button>
+        </div>
       </div>
 
       {open && (
@@ -91,13 +121,14 @@ export function MobileNav({ name }: { name: string }) {
               key={item.href}
               href={item.href}
               onClick={() => setOpen(false)}
-              className={`rounded-lg px-3 py-2 text-[14px] font-semibold ${
+              className={`flex items-center rounded-lg px-3 py-2 text-[14px] font-semibold ${
                 isActive(pathname, item.href)
                   ? 'bg-brand-50 text-brand-700'
                   : 'text-ink-600 hover:bg-ink-50'
               }`}
             >
               {item.label}
+              {item.href === '/notifications' && <UnreadDot count={unread} />}
             </Link>
           ))}
           <Link

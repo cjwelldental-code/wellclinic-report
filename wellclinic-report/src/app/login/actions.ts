@@ -14,11 +14,11 @@ export async function login(_prev: LoginState, form: FormData): Promise<LoginSta
 
   const members = configuredMembers();
   if (members.length === 0) {
-    return { error: 'TEAM_MEMBERS 환경변수가 비어 있습니다. SETUP.md를 확인하세요.' };
+    return { error: '이름 목록이 비어 있습니다. src/lib/members.ts 의 ROSTER 를 확인하세요.' };
   }
 
   const member = members.find((m) => m.name === name);
-  if (!member) return { error: '팀원을 선택해 주세요.' };
+  if (!member) return { error: '이름을 선택해 주세요.' };
 
   if (!checkPassword(password)) {
     return { error: '비밀번호가 맞지 않습니다.' };

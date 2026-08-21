@@ -14,8 +14,7 @@ const ENV_VARS = [
   { key: 'GOOGLE_SERVICE_ACCOUNT_EMAIL', desc: '서비스 계정 이메일' },
   { key: 'GOOGLE_PRIVATE_KEY', desc: '서비스 계정 비공개 키' },
   { key: 'GOOGLE_CALENDAR_IDS', desc: '연결할 구글 캘린더 (이름=ID, 쉼표로 구분)' },
-  { key: 'TEAM_MEMBERS', desc: '팀원 목록 (이름:역할, 쉼표로 구분)' },
-  { key: 'TEAM_PASSWORD', desc: '팀 공용 로그인 비밀번호' },
+  { key: 'TEAM_PASSWORD', desc: '공용 로그인 비밀번호' },
   { key: 'SESSION_SECRET', desc: '세션 서명용 임의 문자열 (16자 이상)' },
   { key: 'INGEST_TOKEN', desc: '매일 아침 자동 수집이 데이터를 보낼 때 쓰는 토큰' },
 ];
@@ -163,23 +162,25 @@ export default async function SetupPage() {
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card title={`팀원 ${members.length}명`}>
+        <Card title={`구성원 ${members.length}명`}>
           {members.length === 0 ? (
-            <p className="text-[13px] text-ink-500">TEAM_MEMBERS 환경변수가 비어 있습니다.</p>
+            <p className="text-[13px] text-ink-500">
+              src/lib/members.ts 의 ROSTER 가 비어 있습니다.
+            </p>
           ) : (
             <ul className="space-y-1.5">
               {members.map((m) => (
                 <li key={m.name} className="flex items-center gap-2 text-[14px]">
                   <span className="font-semibold text-ink-800">{m.name}</span>
-                  <Badge>{m.role}</Badge>
-                  {m.name === session.name && <Badge tone="brand">나</Badge>}
+                  <Badge tone={m.director ? 'brand' : 'neutral'}>{m.role}</Badge>
+                  {m.name === session.name && <Badge tone="green">나</Badge>}
                 </li>
               ))}
             </ul>
           )}
-          <p className="mt-3 text-[12px] text-ink-400">
-            팀원을 추가하려면 TEAM_MEMBERS 값에 &lsquo;,이름:역할&rsquo; 을 덧붙이고 다시
-            배포하세요.
+          <p className="mt-3 text-[12px] leading-relaxed text-ink-400">
+            사람을 추가하려면 <code className="text-ink-600">src/lib/members.ts</code> 의 ROSTER 에
+            한 줄 넣고 Push 하면 됩니다. 적은 순서가 화면에 보이는 순서입니다.
           </p>
         </Card>
 

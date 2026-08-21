@@ -4,8 +4,15 @@ import { revalidatePath } from 'next/cache';
 import { configuredMembers, requireSession } from '@/lib/auth';
 import { appendRow, deleteRow, readTable, updateRow } from '@/lib/sheets';
 import { calendarSources, createEvent } from '@/lib/calendar';
+import { findMember } from '@/lib/members';
 import { isValidDate, todayKST } from '@/lib/date';
-import type { DailyReport, MonthlyReport } from '@/lib/schema';
+import {
+  COMMENT_TARGETS,
+  type CommentRow,
+  type DailyReport,
+  type MonthlyReport,
+  type ReadRow,
+} from '@/lib/schema';
 
 export interface ActionResult {
   ok: boolean;
@@ -206,6 +213,92 @@ export async function addCalendarEvent(
 
     return `${target.label} 캘린더에 일정을 넣었습니다.`;
   }, ['/', '/calendar']);
+}
+
+// ---------------------------------------------------------------------------
+// 코멘트 · 피드백
+// ---------------------------------------------------------------------------
+
+/**
+ * 일일보고 · 프로젝트 · 일정에 코멘트를 단다.
+ *
+ * 대상제목과 링크를 함께 저장한다. 알림 목록이 원본을 다시 읽지 않고도 "무엇에 달린 코멘트인지"
+ * 를 보여줄 수 있고, 일정처럼 원본이 구글 캘린더에 있는 경우에도 흔적이 남는다.
+ */
+export async function addComment(
+  _prev: ActionResult | null,
+  form: FormData,
+): Promise<ActionResult> {
+  return run(async () => {
+    const session = await requireSession();
+
+    const kind = str(form, '대상종류');
+    const targetId = str(form, '대상id');
+    const body = str(form, '내용');
+
+    if (!(COMMENT_TARGETS as readonly string[]).includes(kind)) {
+      throw new Error('코멘트를 달 대상을 찾지 못했습니다.');
+    }
+    if (!targetId) throw new Error('코멘트를 달 대상을 찾지 못했습니다.');
+    if (!body) throw new Error('내용을 입력해 주세요.');
+
+    await appendRow('comments', {
+      대상종류: kind,
+      대상id: targetId,
+      대상제목: str(form, '대상제목'),
+      링크: str(form, '링크'),
+      작성자: session.name,
+      역할: findMember(session.name)?.role ?? session.role,
+      내용: body,
+    });
+
+    return '코멘트를 남겼습니다.';
+  }, ['/', '/daily', '/projects', '/calendar', '/notifications']);
+}
+
+export async function deleteComment(
+  _prev: ActionResult | null,
+  form: FormData,
+): Promise<ActionResult> {
+  return run(async () => {
+    const session = await requireSession();
+    const id = str(form, 'id');
+
+    // 남의 코멘트를 지울 수는 없다
+    const rows = await readTable<CommentRow>('comments');
+    const found = rows.find((c) => c.id === id);
+    if (!found) throw new Error('삭제할 코멘트를 찾지 못했습니다.');
+    if (found.작성자 !== session.name) throw new Error('본인이 쓴 코멘트만 지울 수 있습니다.');
+
+    await deleteRow('comments', id);
+    return '코멘트를 지웠습니다.';
+  }, ['/', '/daily', '/projects', '/calendar', '/notifications']);
+}
+
+/**
+ * 알림을 지금 시각으로 확인 처리한다. 사람당 한 행만 유지한다.
+ * 알림 화면을 열 때 자동으로 부르지 않고 버튼으로 누르게 한다.
+ * (화면을 열자마자 지워지면 미처 못 읽고 넘어간 것이 사라진다)
+ */
+export async function markNotificationsRead(
+  _prev: ActionResult | null,
+  _form: FormData,
+): Promise<ActionResult> {
+  return run(async () => {
+    const session = await requireSession();
+    const now = new Date().toISOString();
+
+    const rows = await readTable<ReadRow>('reads');
+    const existing = rows.find((r) => r.사용자 === session.name);
+
+    if (existing) {
+      await updateRow('reads', existing.id, { 확인일시: now });
+    } else {
+      await appendRow('reads', { 사용자: session.name, 확인일시: now });
+    }
+
+    return '모두 확인 처리했습니다.';
+  }, ['/', '/notifications']);
 }
 
 // ---------------------------------------------------------------------------

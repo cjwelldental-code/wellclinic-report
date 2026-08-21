@@ -58,6 +58,61 @@ export function Text({
   );
 }
 
+/**
+ * 30분 단위 시각 선택.
+ *
+ * type="time" 을 쓰면 브라우저 기본 시계가 1분 단위로 뜬다. 회의·면접·강의는 30분 단위로만
+ * 잡히는데 분을 한 칸씩 굴려 맞추게 되고, 실수로 11:57 같은 값이 들어가기도 했다.
+ * 목록으로 바꾸면 고를 수 있는 값 자체가 30분 단위가 된다.
+ */
+const HALF_HOURS: { value: string; label: string }[] = Array.from({ length: 48 }, (_, i) => {
+  const h = Math.floor(i / 2);
+  const m = i % 2 === 0 ? '00' : '30';
+  const 오후 = h >= 12;
+  const 열두시간 = h % 12 === 0 ? 12 : h % 12;
+  return {
+    value: `${String(h).padStart(2, '0')}:${m}`,
+    label: `${오후 ? '오후' : '오전'} ${열두시간}:${m}`,
+  };
+});
+
+export function TimeSelect({
+  name,
+  label,
+  defaultValue = '',
+  hint,
+}: {
+  name: string;
+  label: string;
+  defaultValue?: string;
+  hint?: string;
+}) {
+  const id = `f-${name}`;
+  // 시트나 캘린더에서 30분 단위가 아닌 값이 들어와도 그 값을 잃지 않게 목록에 끼워 넣는다
+  const options = HALF_HOURS.some((o) => o.value === defaultValue) || !defaultValue
+    ? HALF_HOURS
+    : [...HALF_HOURS, { value: defaultValue, label: defaultValue }].sort((a, b) =>
+        a.value.localeCompare(b.value),
+      );
+
+  return (
+    <div>
+      <label className="label" htmlFor={id}>
+        {label}
+      </label>
+      <select id={id} name={name} className="field tnum" defaultValue={defaultValue}>
+        <option value="">— 선택 —</option>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      {hint && <p className="mt-1 text-[12px] text-ink-400">{hint}</p>}
+    </div>
+  );
+}
+
 export function Select({
   name,
   label,

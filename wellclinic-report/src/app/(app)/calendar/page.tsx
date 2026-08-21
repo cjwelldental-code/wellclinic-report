@@ -1,50 +1,57 @@
 import Link from 'next/link';
+import { requireSession } from '@/lib/auth';
 import { calendarSources, listEvents } from '@/lib/calendar';
-import { activeProjects, getProjects } from '@/lib/data';
+import { activeProjects, getComments, getProjects } from '@/lib/data';
 import { addCalendarEvent } from '@/app/actions';
 import { ActionForm, Disclosure } from '@/components/ActionForm';
-import { Area, Row, Select, Text } from '@/components/Field';
+import { Area, Row, Select, Text, TimeSelect } from '@/components/Field';
+import { CalendarGrid, CalendarList, type GridItem } from '@/components/CalendarGrid';
 import {
-  WEEKDAYS,
   calendarGrid,
   currentMonthKST,
-  formatKorean,
   formatMonth,
   monthRange,
   shiftMonth,
   todayKST,
 } from '@/lib/date';
-import { Badge, Card, PageHeader } from '@/components/ui';
+import { Card, PageHeader } from '@/components/ui';
+import type { CommentRow } from '@/lib/schema';
 
 export const dynamic = 'force-dynamic';
-
-interface DayItem {
-  key: string;
-  label: string;
-  time: string;
-  kind: 'event' | 'deadline' | 'start' | 'holiday';
-  href?: string;
-  calendar?: string;
-}
 
 export default async function CalendarPage({
   searchParams,
 }: {
   searchParams: Promise<{ m?: string }>;
 }) {
+  const session = await requireSession();
   const { m } = await searchParams;
   const month = /^\d{4}-\d{2}$/.test(m ?? '') ? (m as string) : currentMonthKST();
   const { start, end } = monthRange(month);
   const today = todayKST();
 
-  const [calendarRes, projectRes] = await Promise.all([listEvents(start, end), getProjects()]);
+  const [calendarRes, projectRes, commentRes] = await Promise.all([
+    listEvents(start, end),
+    getProjects(),
+    getComments(),
+  ]);
   const sources = calendarSources();
 
+  // 일정 id별 코멘트. 팝업이 클라이언트 컴포넌트라 미리 묶어서 넘긴다.
+  const commentsByEvent: Record<string, CommentRow[]> = {};
+  for (const c of commentRes.rows) {
+    if (c.대상종류 !== 'event') continue;
+    (commentsByEvent[c.대상id] ??= []).push(c);
+  }
+  for (const list of Object.values(commentsByEvent)) {
+    list.sort((a, b) => a.생성일시.localeCompare(b.생성일시));
+  }
+
   // 날짜별 항목 모으기
-  const byDay = new Map<string, DayItem[]>();
-  const push = (date: string, item: DayItem) => {
+  const byDay: Record<string, GridItem[]> = {};
+  const push = (date: string, item: GridItem) => {
     if (!date) return;
-    byDay.set(date, [...(byDay.get(date) ?? []), item]);
+    (byDay[date] ??= []).push(item);
   };
 
   for (const e of calendarRes.events) {
@@ -54,10 +61,18 @@ export default async function CalendarPage({
     while (cursor <= e.end && guard < 60) {
       push(cursor, {
         key: `${e.id}-${cursor}`,
+        eventId: e.holiday ? undefined : e.id,
         label: e.title,
         time: cursor === e.start ? e.time : '',
+        endTime: e.endTime,
         kind: e.holiday ? 'holiday' : 'event',
         calendar: e.calendar,
+        location: e.location,
+        description: e.description,
+        link: e.link,
+        start: e.start,
+        end: e.end,
+        allDay: e.allDay,
       });
       const [y, mo, d] = cursor.split('-').map(Number);
       const next = new Date(Date.UTC(y, mo - 1, d + 1));
@@ -73,8 +88,13 @@ export default async function CalendarPage({
         key: `d-${p.id}`,
         label: `${p.이름} 마감`,
         time: '',
+        endTime: '',
         kind: 'deadline',
         href: `/projects/${p.id}`,
+        description: p.목표 || p.설명 || '',
+        start: p.마감일,
+        end: p.마감일,
+        allDay: true,
       });
     }
     if (p.시작일 >= start && p.시작일 <= end) {
@@ -82,20 +102,23 @@ export default async function CalendarPage({
         key: `s-${p.id}`,
         label: `${p.이름} 시작`,
         time: '',
+        endTime: '',
         kind: 'start',
         href: `/projects/${p.id}`,
+        description: p.목표 || p.설명 || '',
+        start: p.시작일,
+        end: p.시작일,
+        allDay: true,
       });
     }
   }
 
-  const 휴일 = new Set(
-    [...byDay.entries()]
-      .filter(([, items]) => items.some((i) => i.kind === 'holiday'))
-      .map(([date]) => date),
-  );
+  const holidays = Object.entries(byDay)
+    .filter(([, items]) => items.some((i) => i.kind === 'holiday'))
+    .map(([date]) => date);
 
   const grid = calendarGrid(month);
-  const listView = [...byDay.entries()]
+  const listView = Object.entries(byDay)
     .filter(([date]) => date >= start && date <= end)
     .sort(([a], [b]) => a.localeCompare(b));
 
@@ -153,8 +176,8 @@ export default async function CalendarPage({
           <Row cols={4}>
             <Text name="날짜" label="날짜" type="date" defaultValue={today} required />
             <Text name="종료일" label="종료일" type="date" hint="하루짜리면 비워 두세요" />
-            <Text name="시작시각" label="시작" type="time" />
-            <Text name="종료시각" label="종료" type="time" />
+            <TimeSelect name="시작시각" label="시작" />
+            <TimeSelect name="종료시각" label="종료" />
           </Row>
 
           <Row cols={2}>
@@ -162,7 +185,7 @@ export default async function CalendarPage({
             <Text
               name="참석자"
               label="참석자"
-              placeholder="예: 김진형 원장, 김가영 위생사, 이하늘 대리"
+              placeholder="예: 빙정호 원장, 김태형 팀장, 이하늘 대리"
             />
           </Row>
 
@@ -170,8 +193,9 @@ export default async function CalendarPage({
         </ActionForm>
 
         <p className="mt-4 border-t border-ink-100 pt-3 text-[12px] leading-relaxed text-ink-400">
-          시각을 비워 두면 종일 일정으로 들어갑니다. 참석자는 캘린더 설명에 적히고 실제 초대장은
-          가지 않습니다. 등록한 일정은 팀원 각자의 구글 캘린더에도 그대로 보입니다.
+          시각은 30분 단위로 고릅니다. 비워 두면 종일 일정으로 들어갑니다. 참석자는 캘린더 설명에
+          적히고 실제 초대장은 가지 않습니다. 등록한 일정은 팀원 각자의 구글 캘린더에도 그대로
+          보입니다.
         </p>
       </Disclosure>
 
@@ -188,129 +212,35 @@ export default async function CalendarPage({
         <span className="inline-flex items-center gap-1.5 text-ink-500">
           <span className="h-2 w-2 rounded-full bg-red-500" /> 공휴일
         </span>
+        <span className="ml-auto text-ink-400">일정을 누르면 상세 내용이 열립니다.</span>
       </div>
 
-      {/* 데스크톱: 달력 격자 */}
-      <div className="hidden overflow-hidden rounded-xl border border-ink-200 bg-white md:block">
-        <div className="grid grid-cols-7 border-b border-ink-200 bg-ink-50">
-          {WEEKDAYS.map((w, i) => (
-            <div
-              key={w}
-              className={`py-2 text-center text-[12px] font-semibold ${
-                i === 0 ? 'text-red-500' : i === 6 ? 'text-sky-600' : 'text-ink-500'
-              }`}
-            >
-              {w}
-            </div>
-          ))}
-        </div>
+      <CalendarGrid
+        grid={grid}
+        month={month}
+        today={today}
+        byDay={byDay}
+        holidays={holidays}
+        commentsByEvent={commentsByEvent}
+        currentUser={session.name}
+      />
 
-        <div className="grid grid-cols-7">
-          {grid.map((date, i) => {
-            const inMonth = date.slice(0, 7) === month;
-            const items = byDay.get(date) ?? [];
-            const isToday = date === today;
-            return (
-              <div
-                key={date}
-                className={`min-h-28 border-b border-r border-ink-100 p-1.5 ${
-                  i % 7 === 6 ? 'border-r-0' : ''
-                } ${inMonth ? '' : 'bg-ink-50/60'}`}
-              >
-                <div className="mb-1 flex items-center justify-between">
-                  <span
-                    className={`inline-flex h-5 min-w-5 items-center justify-center rounded px-1 text-[12px] font-semibold tnum ${
-                      isToday
-                        ? 'bg-brand-600 text-white'
-                        : !inMonth
-                          ? 'text-ink-300'
-                          : 휴일.has(date) || i % 7 === 0
-                            ? 'text-red-500'
-                            : 'text-ink-600'
-                    }`}
-                  >
-                    {Number(date.slice(8))}
-                  </span>
-                </div>
-
-                <ul className="space-y-0.5">
-                  {items.slice(0, 4).map((item) => {
-                    const tone =
-                      item.kind === 'holiday'
-                        ? 'bg-red-500 text-white'
-                        : item.kind === 'deadline'
-                          ? 'bg-red-50 text-red-700'
-                          : item.kind === 'start'
-                            ? 'bg-brand-50 text-brand-700'
-                            : 'bg-sky-50 text-sky-700';
-                    const body = (
-                      <span className="block truncate rounded px-1 py-0.5 text-[11px] leading-snug">
-                        {item.time && <span className="mr-1 tnum opacity-70">{item.time}</span>}
-                        {item.label}
-                      </span>
-                    );
-                    return (
-                      <li key={item.key} className={`${tone} rounded`}>
-                        {item.href ? <Link href={item.href}>{body}</Link> : body}
-                      </li>
-                    );
-                  })}
-                  {items.length > 4 && (
-                    <li className="px-1 text-[11px] text-ink-400">+{items.length - 4}건 더</li>
-                  )}
-                </ul>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 모바일: 목록 */}
-      <div className="space-y-3 md:hidden">
-        {listView.length === 0 ? (
+      {listView.length === 0 ? (
+        <div className="md:hidden">
           <Card>
             <p className="py-8 text-center text-[14px] text-ink-400">
               {formatMonth(month)}에 등록된 일정이 없습니다.
             </p>
           </Card>
-        ) : (
-          listView.map(([date, items]) => (
-            <div key={date} className={`card p-4 ${date === today ? 'border-brand-300' : ''}`}>
-              <p className="mb-2 text-[13px] font-semibold text-ink-700 tnum">
-                {formatKorean(date)}
-                {date === today && <span className="ml-2 text-brand-600">오늘</span>}
-              </p>
-              <ul className="space-y-1.5">
-                {items.map((item) => (
-                  <li key={item.key} className="flex items-center gap-2">
-                    <Badge
-                      tone={
-                        item.kind === 'holiday' || item.kind === 'deadline'
-                          ? 'red'
-                          : item.kind === 'start'
-                            ? 'brand'
-                            : 'blue'
-                      }
-                    >
-                      {item.kind === 'holiday'
-                        ? '휴일'
-                        : item.kind === 'deadline'
-                          ? '마감'
-                          : item.kind === 'start'
-                            ? '시작'
-                            : (item.calendar ?? '일정')}
-                    </Badge>
-                    <span className="min-w-0 flex-1 truncate text-[14px] text-ink-800">
-                      {item.href ? <Link href={item.href}>{item.label}</Link> : item.label}
-                    </span>
-                    {item.time && <span className="text-[12px] text-ink-400 tnum">{item.time}</span>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))
-        )}
-      </div>
+        </div>
+      ) : (
+        <CalendarList
+          listView={listView}
+          today={today}
+          commentsByEvent={commentsByEvent}
+          currentUser={session.name}
+        />
+      )}
     </>
   );
 }

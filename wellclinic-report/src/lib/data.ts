@@ -6,8 +6,10 @@ import {
   REVENUE_CHANNELS,
   type AdSpendRow,
   type BalanceRow,
+  type CommentRow,
   type DailyReport,
   type LeadRow,
+  type ReadRow,
   type MonthlyReport,
   type Project,
   type RevenueRow,
@@ -36,6 +38,8 @@ async function safeRead<T extends Record<string, string>>(
 export const getProjects = () => safeRead<Project>('projects');
 export const getDailyReports = () => safeRead<DailyReport>('daily');
 export const getMonthlyReports = () => safeRead<MonthlyReport>('monthly');
+export const getComments = () => safeRead<CommentRow>('comments');
+export const getReads = () => safeRead<ReadRow>('reads');
 export const getLeads = () => safeRead<LeadRow>('leads');
 export const getAdSpend = () => safeRead<AdSpendRow>('adspend');
 export const getRevenue = () => safeRead<RevenueRow>('revenue');

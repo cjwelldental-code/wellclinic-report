@@ -27,8 +27,9 @@ export function LoginForm({
       <input type="hidden" name="next" value={next} />
 
       <div>
+        {/* 원장님도 함께 쓰는 시스템이라 '팀원' 대신 '이름' 으로 부른다 */}
         <label className="label" htmlFor="name">
-          팀원
+          이름
         </label>
         <select id="name" name="name" className="field" defaultValue={members[0]?.name}>
           {members.map((m) => (
@@ -41,7 +42,7 @@ export function LoginForm({
 
       <div>
         <label className="label" htmlFor="password">
-          팀 비밀번호
+          비밀번호
         </label>
         <input
           id="password"

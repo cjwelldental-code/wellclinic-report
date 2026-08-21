@@ -1,8 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { configuredMembers } from '@/lib/auth';
+import { configuredMembers, requireSession } from '@/lib/auth';
 import { deleteProject, saveProject } from '@/app/actions';
-import { getDailyReports, getProjects } from '@/lib/data';
+import { commentsFor } from '@/lib/comments';
+import { Comments } from '@/components/Comments';
+import { getComments, getDailyReports, getProjects } from '@/lib/data';
 import { daysUntil, formatKorean } from '@/lib/date';
 import { CLIENTS, PRIORITIES, PROJECT_STATUSES } from '@/lib/schema';
 import {
@@ -25,7 +27,12 @@ export default async function ProjectDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [projectRes, dailyRes] = await Promise.all([getProjects(), getDailyReports()]);
+  const session = await requireSession();
+  const [projectRes, dailyRes, commentRes] = await Promise.all([
+    getProjects(),
+    getDailyReports(),
+    getComments(),
+  ]);
 
   const project = projectRes.rows.find((p) => p.id === id);
   if (!project) notFound();
@@ -80,6 +87,21 @@ export default async function ProjectDetailPage({
       <div className="mb-5">
         <ProgressBar value={progress} />
       </div>
+
+      <Card title="코멘트 · 피드백" className="mb-5">
+        <Comments
+          kind="project"
+          targetId={project.id}
+          targetTitle={project.이름}
+          href={`/projects/${project.id}`}
+          comments={commentsFor(commentRes.rows, 'project', project.id)}
+          currentUser={session.name}
+          compact
+        />
+        <p className="mt-3 text-[12px] text-ink-400">
+          남긴 피드백은 담당자{project.담당자 ? ` (${project.담당자})` : ''}에게 알림으로 갑니다.
+        </p>
+      </Card>
 
       {project.설명 && (
         <Card title="설명" className="mb-5">

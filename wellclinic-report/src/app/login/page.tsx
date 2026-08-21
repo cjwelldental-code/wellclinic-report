@@ -25,7 +25,7 @@ export default async function LoginPage({
         <div className="card p-6">
           {members.length === 0 ? (
             <p className="text-[14px] leading-relaxed text-ink-500">
-              팀원 목록이 설정되지 않았습니다. Vercel 환경변수에 TEAM_MEMBERS 를 추가한 뒤 다시
+              이름 목록이 비어 있습니다. src/lib/members.ts 의 ROSTER 에 사람을 추가한 뒤 다시
               배포해 주세요.
             </p>
           ) : (
