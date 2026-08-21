@@ -1,6 +1,9 @@
 import Link from 'next/link';
-import { listEvents } from '@/lib/calendar';
+import { calendarSources, listEvents } from '@/lib/calendar';
 import { activeProjects, getProjects } from '@/lib/data';
+import { addCalendarEvent } from '@/app/actions';
+import { ActionForm, Disclosure } from '@/components/ActionForm';
+import { Area, Row, Select, Text } from '@/components/Field';
 import {
   WEEKDAYS,
   calendarGrid,
@@ -35,6 +38,7 @@ export default async function CalendarPage({
   const today = todayKST();
 
   const [calendarRes, projectRes] = await Promise.all([listEvents(start, end), getProjects()]);
+  const sources = calendarSources();
 
   // 날짜별 항목 모으기
   const byDay = new Map<string, DayItem[]>();
@@ -121,6 +125,49 @@ export default async function CalendarPage({
           </Link>
         </div>
       )}
+
+      <Disclosure label="일정 추가" openLabel="일정 추가">
+        <ActionForm action={addCalendarEvent} submitLabel="캘린더에 넣기" resetOnSuccess>
+          <Row cols={2}>
+            <Text
+              name="제목"
+              label="일정 이름"
+              required
+              placeholder="예: 서원노인복지관 임플란트 강의 프로그램"
+            />
+            <Select
+              name="캘린더"
+              label="넣을 캘린더"
+              options={sources.map((s) => s.id)}
+              labels={sources.map((s) => s.label)}
+              defaultValue={sources[0]?.id}
+            />
+          </Row>
+
+          <Row cols={4}>
+            <Text name="날짜" label="날짜" type="date" defaultValue={today} required />
+            <Text name="종료일" label="종료일" type="date" hint="하루짜리면 비워 두세요" />
+            <Text name="시작시각" label="시작" type="time" />
+            <Text name="종료시각" label="종료" type="time" />
+          </Row>
+
+          <Row cols={2}>
+            <Text name="장소" label="장소" placeholder="예: 서원노인복지관" />
+            <Text
+              name="참석자"
+              label="참석자"
+              placeholder="예: 김진형 원장, 김가영 위생사, 이하늘 대리"
+            />
+          </Row>
+
+          <Area name="메모" label="메모" rows={2} placeholder="준비물, 이동 계획 등" />
+        </ActionForm>
+
+        <p className="mt-4 border-t border-ink-100 pt-3 text-[12px] leading-relaxed text-ink-400">
+          시각을 비워 두면 종일 일정으로 들어갑니다. 참석자는 캘린더 설명에 적히고 실제 초대장은
+          가지 않습니다. 등록한 일정은 팀원 각자의 구글 캘린더에도 그대로 보입니다.
+        </p>
+      </Disclosure>
 
       <div className="mb-4 flex flex-wrap gap-2 text-[12px]">
         <span className="inline-flex items-center gap-1.5 text-ink-500">

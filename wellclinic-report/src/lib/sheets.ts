@@ -9,7 +9,9 @@ import { TABLES, type TableKey } from './schema';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
-  'https://www.googleapis.com/auth/calendar.readonly',
+  // 일정 화면에서 등록한 일정을 구글 캘린더에 넣어야 해서 읽기 전용으로는 부족하다.
+  // 캘린더 쪽 공유 권한도 "변경 후 모든 일정 세부정보 확인" 이상이어야 실제로 써진다.
+  'https://www.googleapis.com/auth/calendar.events',
 ];
 
 let cached: sheets_v4.Sheets | null = null;

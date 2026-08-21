@@ -3,7 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { configuredMembers, requireSession } from '@/lib/auth';
 import { appendRow, deleteRow, readTable, updateRow } from '@/lib/sheets';
-import { todayKST } from '@/lib/date';
+import { calendarSources, createEvent } from '@/lib/calendar';
+import { isValidDate, todayKST } from '@/lib/date';
 import type { DailyReport, MonthlyReport } from '@/lib/schema';
 
 export interface ActionResult {
@@ -143,6 +144,68 @@ export async function deleteProject(
     if (!ok) throw new Error('삭제할 프로젝트를 찾지 못했습니다.');
     return '프로젝트를 삭제했습니다.';
   }, ['/', '/projects', '/calendar']);
+}
+
+// ---------------------------------------------------------------------------
+// 일정 (구글 캘린더에 직접 등록)
+// ---------------------------------------------------------------------------
+
+export async function addCalendarEvent(
+  _prev: ActionResult | null,
+  form: FormData,
+): Promise<ActionResult> {
+  return run(async () => {
+    const session = await requireSession();
+
+    const 제목 = str(form, '제목');
+    const 날짜 = str(form, '날짜');
+    if (!제목) throw new Error('일정 이름을 입력해 주세요.');
+    if (!isValidDate(날짜)) throw new Error('날짜를 선택해 주세요.');
+
+    const 종료일 = str(form, '종료일');
+    if (종료일 && 종료일 < 날짜) throw new Error('종료일이 시작일보다 빠릅니다.');
+
+    const 시작시각 = str(form, '시작시각');
+    const 종료시각 = str(form, '종료시각');
+    if (종료시각 && !시작시각) throw new Error('시작 시각을 함께 입력해 주세요.');
+    if (시작시각 && 종료시각 && (!종료일 || 종료일 === 날짜) && 종료시각 <= 시작시각) {
+      throw new Error('종료 시각이 시작 시각보다 빠릅니다.');
+    }
+
+    const sources = calendarSources();
+    if (sources.length === 0) {
+      throw new Error('연결된 캘린더가 없습니다. GOOGLE_CALENDAR_IDS 를 확인해 주세요.');
+    }
+    const picked = str(form, '캘린더');
+    const target = sources.find((s) => s.id === picked) ?? sources[0];
+
+    try {
+      await createEvent({
+        calendarId: target.id,
+        제목,
+        날짜,
+        종료일,
+        시작시각,
+        종료시각,
+        장소: str(form, '장소'),
+        참석자: str(form, '참석자'),
+        메모: str(form, '메모'),
+        작성자: session.name,
+      });
+    } catch (e) {
+      const raw = (e as Error).message;
+      // 권한이 열람까지만 열려 있으면 여기서 막힌다. 무엇을 바꿔야 하는지 알려 준다.
+      if (/insufficient|forbidden|403|permission/i.test(raw)) {
+        throw new Error(
+          '캘린더에 쓸 권한이 없습니다. 구글 캘린더 설정에서 서비스 계정 권한을 ' +
+            '"변경 후 모든 일정 세부정보 확인" 으로 바꿔 주세요.',
+        );
+      }
+      throw e;
+    }
+
+    return `${target.label} 캘린더에 일정을 넣었습니다.`;
+  }, ['/', '/calendar']);
 }
 
 // ---------------------------------------------------------------------------

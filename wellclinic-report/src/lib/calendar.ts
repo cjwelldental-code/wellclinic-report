@@ -33,6 +33,67 @@ export function calendarSources(): CalendarSource[] {
     });
 }
 
+/**
+ * 구글 캘린더에 일정을 새로 만든다.
+ *
+ * 서비스 계정으로 넣기 때문에 캘린더 공유 권한이 "일정 변경" 이상이어야 한다.
+ * 열람 권한만 있으면 403이 나므로, 그때는 무엇을 바꿔야 하는지 알려 준다.
+ *
+ * 참석자는 실제 초대 대상이 아니라 설명에 적는다. 서비스 계정은 도메인 위임 설정 없이
+ * 남을 초대할 수 없기 때문이다.
+ */
+export async function createEvent(input: {
+  calendarId: string;
+  제목: string;
+  날짜: string;
+  종료일?: string;
+  시작시각?: string;
+  종료시각?: string;
+  장소?: string;
+  참석자?: string;
+  메모?: string;
+  작성자?: string;
+}): Promise<{ id: string; link: string }> {
+  const calendar = google.calendar({ version: 'v3', auth: getAuth() });
+
+  const 종료일 = input.종료일 && input.종료일 >= input.날짜 ? input.종료일 : input.날짜;
+  const 시각있음 = Boolean(input.시작시각);
+
+  // 종일 일정의 end.date 는 다음 날을 넣어야 그날까지 표시된다
+  const [y, m, d] = 종료일.split('-').map(Number);
+  const 다음날 = new Date(Date.UTC(y, m - 1, d + 1));
+  const endExclusive = `${다음날.getUTCFullYear()}-${String(다음날.getUTCMonth() + 1).padStart(2, '0')}-${String(다음날.getUTCDate()).padStart(2, '0')}`;
+
+  const description = [
+    input.참석자 ? `참석: ${input.참석자}` : '',
+    input.메모 ?? '',
+    input.작성자 ? `\n(업무 보고 시스템 · ${input.작성자} 등록)` : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+    .trim();
+
+  const res = await calendar.events.insert({
+    calendarId: input.calendarId,
+    requestBody: {
+      summary: input.제목,
+      location: input.장소 || undefined,
+      description: description || undefined,
+      start: 시각있음
+        ? { dateTime: `${input.날짜}T${input.시작시각}:00`, timeZone: 'Asia/Seoul' }
+        : { date: input.날짜 },
+      end: 시각있음
+        ? {
+            dateTime: `${종료일}T${(input.종료시각 || input.시작시각)!}:00`,
+            timeZone: 'Asia/Seoul',
+          }
+        : { date: endExclusive },
+    },
+  });
+
+  return { id: res.data.id ?? '', link: res.data.htmlLink ?? '' };
+}
+
 function toDateOnly(value?: string | null): string {
   if (!value) return '';
   if (value.length === 10) return value;              // 종일 일정

@@ -25,7 +25,7 @@ export function Text({
 }: {
   name: string;
   label: string;
-  type?: 'text' | 'date' | 'number' | 'url' | 'month';
+  type?: 'text' | 'date' | 'number' | 'url' | 'month' | 'time';
   defaultValue?: string;
   placeholder?: string;
   required?: boolean;
@@ -62,6 +62,7 @@ export function Select({
   name,
   label,
   options,
+  labels,
   defaultValue = '',
   placeholder,
   required,
@@ -69,6 +70,8 @@ export function Select({
   name: string;
   label: string;
   options: readonly string[];
+  /** 화면에 보일 이름. 값과 표시가 다를 때만 쓴다 (예: 캘린더 ID ↔ 캘린더 이름) */
+  labels?: readonly string[];
   defaultValue?: string;
   placeholder?: string;
   required?: boolean;
@@ -82,9 +85,9 @@ export function Select({
       </label>
       <select id={id} name={name} className="field" defaultValue={defaultValue} required={required}>
         {placeholder !== undefined && <option value="">{placeholder}</option>}
-        {options.map((o) => (
+        {options.map((o, i) => (
           <option key={o} value={o}>
-            {o}
+            {labels?.[i] ?? o}
           </option>
         ))}
       </select>
